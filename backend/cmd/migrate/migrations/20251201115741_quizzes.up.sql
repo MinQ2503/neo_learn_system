@@ -1,0 +1,9 @@
+CREATE TABLE quizzes (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    lesson_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    duration INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_quiz_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
