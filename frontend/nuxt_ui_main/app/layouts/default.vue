@@ -22,6 +22,13 @@ const links = [[{
     open.value = false
   }
 }, {
+  label: 'Sinh viên',
+  icon: 'i-lucide-graduation-cap',
+  to: '/students',
+  onSelect: () => {
+    open.value = false
+  }
+}, {
   label: 'Customers',
   icon: 'i-lucide-users',
   to: '/customers',

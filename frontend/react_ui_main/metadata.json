@@ -1,0 +1,8 @@
+{
+  "name": "Neo Learn System",
+  "description": "A modern, secure exam-proctoring application with role-based dashboards and claymorphism design.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
