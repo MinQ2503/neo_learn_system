@@ -1,30 +1,27 @@
-# Tài liệu Dự án React UI Main
-
-Tài liệu này mô tả cấu trúc, luồng hoạt động và cách khởi chạy dự án Frontend React (react_ui_main).
+# Tài liệu Dự án Frontend (React UI Main)
 
 ## 1. Cây thư mục
 
-Dưới đây là giải thích nhiệm vụ của các thư mục và tệp tin chính trong dự án:
+Dưới đây là cấu trúc thư mục của dự án `react_ui_main` và giải thích chức năng của từng thành phần:
 
 ```
 react_ui_main/
-├── components/          # Chứa các thành phần UI tái sử dụng (Reusable Components)
-│   ├── CameraCheck.tsx  # Component kiểm tra camera (dùng cho thi trực tuyến)
-│   ├── ClayButton.tsx   # Component Button tùy chỉnh theo style Claymorphism
-│   ├── ClayCard.tsx     # Component Card tùy chỉnh
-│   └── Layout.tsx       # Layout chung cho các trang
-├── pages/               # Chứa các trang chính (Views) của ứng dụng
-│   ├── AdminDashboard.tsx   # Trang bảng điều khiển cho Admin
-│   ├── ExamRoom.tsx         # Trang làm bài thi của sinh viên
-│   ├── Login.tsx            # Trang đăng nhập
-│   ├── StudentDashboard.tsx # Trang bảng điều khiển cho Sinh viên
-│   └── TeacherDashboard.tsx # Trang bảng điều khiển cho Giáo viên
-├── services/            # Chứa các logic xử lý dữ liệu, gọi API
-│   └── mockService.ts   # Dịch vụ giả lập dữ liệu (Mock data) và xử lý auth đơn giản
+├── components/          # Chứa các thành phần UI tái sử dụng (Buttons, Cards, Modals, Layouts...)
+├── pages/               # Chứa các trang giao diện chính của ứng dụng
+│   ├── student/         # Các trang dành riêng cho vai trò Học sinh (Danh sách lớp, Làm bài thi...)
+│   ├── teacher/         # Các trang dành riêng cho vai trò Giáo viên (Quản lý lớp, Ngân hàng câu hỏi...)
+│   ├── AdminDashboard.tsx # Trang bảng điều khiển cho Admin
+│   ├── ExamRoom.tsx     # Trang giao diện làm bài thi
+│   ├── Login.tsx        # Trang đăng nhập
+│   └── ...              # Các trang Dashboard chính
+├── services/            # Chứa logic xử lý dữ liệu và gọi API
+│   ├── api/             # Các service gọi API cụ thể (class, exam, student...)
+│   ├── mockData.ts      # Dữ liệu giả lập (mock data) dùng để test giao diện
+│   └── mockService.ts   # Service xử lý logic với dữ liệu giả lập
 ├── App.tsx              # Component gốc, chứa cấu hình Routing và logic phân quyền (Auth)
-├── index.html           # File HTML chính, điểm vào của ứng dụng
-├── index.tsx            # Điểm vào của React, render App vào DOM
-├── types.ts             # Định nghĩa các kiểu dữ liệu TypeScript (Interfaces, Types, Enums)
+├── index.tsx            # Điểm khởi chạy của ứng dụng React (Entry point)
+├── index.html           # File HTML chính
+├── types.ts             # Định nghĩa các kiểu dữ liệu TypeScript (Interfaces, Types)
 ├── vite.config.ts       # Cấu hình công cụ build Vite
 └── package.json         # Khai báo dependencies và các scripts chạy dự án
 ```
@@ -33,53 +30,46 @@ react_ui_main/
 
 Luồng khởi chạy và hoạt động của ứng dụng diễn ra như sau:
 
-1.  **Khởi động (`index.html`):** Khi trình duyệt truy cập vào ứng dụng, file `index.html` được tải đầu tiên.
-2.  **Entry Point (`index.tsx`):** File này được nhúng trong `index.html`. Nó khởi tạo React Root và render component `<App />` vào phần tử có id là `root`.
-3.  **Routing & Auth (`App.tsx`):**
-    - `App.tsx` là nơi quản lý điều hướng (Routing) chính.
-    - Khi ứng dụng load, `useEffect` sẽ kiểm tra trạng thái đăng nhập (Role) từ `localStorage` thông qua `getRoleFromStorage`.
-    - **Chưa đăng nhập:** Chuyển hướng về trang `Login` (`/`).
-    - **Đã đăng nhập:** Dựa vào `Role` (STUDENT, TEACHER, ADMIN) để chuyển hướng đến Dashboard tương ứng (`/student`, `/teacher`, `/admin`).
-4.  **Tương tác người dùng:**
-    - Người dùng tương tác với các trang trong thư mục `pages/`.
-    - Các trang này sử dụng các component từ `components/` để hiển thị giao diện.
-    - Dữ liệu được lấy hoặc xử lý thông qua `services/mockService.ts`.
+1.  **Khởi động (Entry Point):**
+    *   Trình duyệt tải file `index.html`.
+    *   `index.html` gọi script `index.tsx`.
+    *   `index.tsx` tìm thẻ `div` có id là `root` và render component `<App />` vào đó.
+
+2.  **Khởi tạo & Routing (App.tsx):**
+    *   Component `App` được khởi tạo.
+    *   Nó kiểm tra trạng thái đăng nhập (User Role) từ storage (thông qua `getRoleFromStorage` trong `services/mockService`).
+    *   **Chưa đăng nhập:** Ứng dụng hiển thị trang `Login` (`/`).
+    *   **Đã đăng nhập:** Dựa vào vai trò (Student, Teacher, Admin), ứng dụng điều hướng (Navigate) người dùng đến Dashboard tương ứng (ví dụ: `/student`, `/teacher`).
+
+3.  **Điều hướng (Navigation):**
+    *   Ứng dụng sử dụng `react-router-dom` (HashRouter) để quản lý việc chuyển trang mà không cần tải lại trang.
+    *   Các Route được định nghĩa trong `App.tsx` sẽ map URL với các Component trong thư mục `pages/`.
 
 ## 3. Cách chạy và khởi động
 
 Dự án sử dụng **Vite** làm công cụ build và phát triển.
 
-### Yêu cầu
+### Yêu cầu:
+*   Node.js đã được cài đặt trên máy.
 
-- Node.js (khuyến nghị phiên bản LTS mới nhất)
-- npm (hoặc yarn/pnpm)
-
-### Các bước cài đặt
+### Các bước thực hiện:
 
 1.  **Mở terminal** tại thư mục `frontend/react_ui_main`.
-2.  **Cài đặt các thư viện phụ thuộc (Dependencies):**
+
+2.  **Cài đặt các thư viện (Dependencies):**
+    Chạy lệnh sau để tải các gói cần thiết được khai báo trong `package.json`:
     ```bash
     npm install
     ```
 
-### Lệnh chạy
+3.  **Chạy dự án ở môi trường Development:**
+    Lệnh này sẽ khởi động server local (thường là http://localhost:5173):
+    ```bash
+    npm run dev
+    ```
 
-- **Chạy môi trường phát triển (Development):**
-  Lệnh này sẽ khởi động server local (thường là http://localhost:3000).
-
-  ```bash
-  npm run dev
-  ```
-
-- **Build cho môi trường sản xuất (Production):**
-  Lệnh này sẽ biên dịch code ra thư mục `dist`.
-
-  ```bash
-  npm run build
-  ```
-
-- **Xem trước bản build (Preview):**
-  Chạy thử bản đã build.
-  ```bash
-  npm run preview
-  ```
+4.  **Build dự án (Production):**
+    Để đóng gói ứng dụng cho môi trường production:
+    ```bash
+    npm run build
+    ```
