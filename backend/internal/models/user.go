@@ -36,6 +36,7 @@ type Profile struct {
 	Bio       string    `json:"bio" db:"bio"`
 	Avatar    string    `json:"avatar" db:"avatar"`
 	Phone     string    `json:"phone" db:"phone"`
+	BirthDay  time.Time `json:"birth_day" db:"birth_day"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }

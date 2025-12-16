@@ -7,6 +7,7 @@ import (
 
 	config "github.com/MinQ2503/neo_learn_system/backend/configs"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/auth"
+	"github.com/MinQ2503/neo_learn_system/backend/internal/services/user"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -49,6 +50,11 @@ func (s *APIServer) Run() error {
 	authService := auth.NewAuthService(userRepo, time.Second*config.Envs.JWT.ExpirationInSeconds)
 	authHandler := auth.NewAuthHandler(authService)
 
+	// Initialize user service (for student management)
+	studentRepo := user.NewUserRepository(s.db)
+	studentService := user.NewUserService(studentRepo)
+	studentHandler := user.NewUserHandler(studentService)
+
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
@@ -66,6 +72,18 @@ func (s *APIServer) Run() error {
 				protected.POST("/change-password", authHandler.ChangePassword)
 				protected.POST("/logout", authHandler.Logout)
 			}
+		}
+
+		// Student management routes (Teacher only)
+		studentRoutes := v1.Group("/students")
+		studentRoutes.Use(auth.AuthMiddleware())
+		studentRoutes.Use(auth.RoleMiddleware("teacher"))
+		{
+			studentRoutes.POST("", studentHandler.CreateStudent)
+			studentRoutes.GET("", studentHandler.GetStudents)
+			studentRoutes.GET("/:id", studentHandler.GetStudent)
+			studentRoutes.PUT("/:id", studentHandler.UpdateStudent)
+			studentRoutes.DELETE("/:id", studentHandler.DeleteStudent)
 		}
 	}
 
