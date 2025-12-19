@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import Layout from '../components/Layout';
-import ClayCard from '../components/ClayCard';
-import ClayButton from '../components/ClayButton';
-import CameraCheck from '../components/CameraCheck';
-import { Role } from '../types';
-import { MOCK_EXAMS as MockExamsData } from '../services/mockService';
+import Layout from '../../components/Layout';
+import ClayCard from '../../components/ClayCard';
+import ClayButton from '../../components/ClayButton';
+import CameraCheck from '../../components/CameraCheck';
+import { Role } from '../../types';
+import { MOCK_EXAMS as MockExamsData } from '../../services/mockService';
 import { Clock, Calendar, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -129,3 +129,4 @@ const StudentDashboard: React.FC = () => {
 };
 
 export default StudentDashboard;
+

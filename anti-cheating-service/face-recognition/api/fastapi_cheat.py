@@ -9,7 +9,7 @@ import time
 import shutil
 import aiofiles
 import logging
-from typing import Annotated
+from typing import Annotated, Optional, List, Dict
 # from typing_extensions import Annotated
 import json
 from shutil import copyfile
@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
+import httpx
 
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
@@ -61,6 +62,8 @@ LOG_DELETEPERSON = os.path.join(LOG_DIR, "delete_person.log")
 UPLOAD_DIR = os.path.join(CURRENT_DIR, "temp_uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Backend Go API URL (có thể lấy từ environment variable)
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8080/api/v1")
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -104,6 +107,156 @@ def get_current_vietnam_time_log_format():
     now_vietnam = datetime.now(tz_vietnam)
     timestamp = now_vietnam.strftime("%Y-%m-%d %H:%M:%S")
     return timestamp
+
+
+def map_detect_result_to_violations(
+    detect_result: dict,
+    user_quiz_attempt_id: int,
+    evidence_url: Optional[str] = None
+) -> List[Dict]:
+    """
+    Map kết quả detect từ Python sang format violations cho Go API.
+    
+    Args:
+        detect_result: Kết quả từ facedetector.run()
+        user_quiz_attempt_id: ID của quiz attempt trong database
+        evidence_url: URL của ảnh bằng chứng (nếu có)
+    
+    Returns:
+        List các violation objects để gửi lên Go API
+    """
+    violations = []
+    
+    # Map các loại vi phạm từ detect_result
+    # 1. Gaze off screen / Look away
+    gaze = detect_result.get("gaze", "").lower()
+    if gaze and gaze != "center":
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "GAZE_OFF_SCREEN",
+            "level": 2,  # Medium
+            "evidence_url": evidence_url
+        })
+    
+    # 2. Mobile phone detected
+    cheat_phone_list = detect_result.get("cheat_mobilephone", [])
+    if cheat_phone_list and any(item.get("label") == "cell phone" for item in cheat_phone_list):
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "MOBILE_DETECTED",
+            "level": 3,  # High
+            "evidence_url": evidence_url
+        })
+    
+    # 3. Headphone detected
+    cheat_headphone_list = detect_result.get("cheat_headphone", [])
+    if cheat_headphone_list and any(
+        item.get("label") in ["Earphone", "Headphone", "Neckband", "Airpods"]
+        for item in cheat_headphone_list
+    ):
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "HEADPHONE",
+            "level": 2,  # Medium
+            "evidence_url": evidence_url
+        })
+    
+    # 4. Multiple faces
+    person_count = detect_result.get("person", 1)
+    if person_count > 1:
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "MULTI_FACE",
+            "level": 3,  # High
+            "evidence_url": evidence_url
+        })
+    
+    # 5. No face detected
+    if person_count == 0:
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "NO_FACE",
+            "level": 2,  # Medium
+            "evidence_url": evidence_url
+        })
+    
+    # 6. Wrong person (face recognition mismatch)
+    # faces = detect_result.get("faces", [])
+    # if faces and isinstance(faces, list):
+    #     # Nếu có face nhưng không match với candidate_id thì đã được xử lý ở trên
+    #     # Có thể thêm logic kiểm tra ở đây nếu cần
+    #     pass
+    
+    # 7. Cheat status từ point-based detection
+    cheat_status = detect_result.get("cheat_status", {})
+    if cheat_status.get("no_face", 0) > 0:
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "NO_FACE",
+            "level": 2,
+            "evidence_url": evidence_url
+        })
+    
+    if cheat_status.get("multiple_faces", 0) > 0:
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "MULTI_FACE",
+            "level": 3,
+            "evidence_url": evidence_url
+        })
+    
+    if cheat_status.get("gaze_off_screen", 0) > 0:
+        violations.append({
+            "user_quiz_attempt_id": user_quiz_attempt_id,
+            "type": "GAZE_OFF_SCREEN",
+            "level": 2,
+            "evidence_url": evidence_url
+        })
+    
+    return violations
+
+
+async def save_violations_to_db(
+    violations: List[Dict],
+    use_batch: bool = True
+) -> bool:
+    """
+    Gửi violations lên Go API để lưu vào database.
+    
+    Args:
+        violations: List các violation objects
+        use_batch: Nếu True thì dùng batch API, False thì tạo từng cái
+    
+    Returns:
+        True nếu thành công, False nếu có lỗi
+    """
+    if not violations:
+        return True  # Không có violation nào, coi như thành công
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if use_batch and len(violations) > 1:
+                # Dùng batch API
+                url = f"{BACKEND_API_URL}/violations/batch"
+                response = await client.post(url, json=violations)
+            else:
+                # Tạo từng cái một
+                url = f"{BACKEND_API_URL}/violations"
+                for violation in violations:
+                    response = await client.post(url, json=violation)
+                    if response.status_code not in [200, 201]:
+                        logger.error(f"Failed to save violation: {response.text}")
+                        return False
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"Successfully saved {len(violations)} violation(s) to database")
+                return True
+            else:
+                logger.error(f"Failed to save violations: {response.status_code} - {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Error saving violations to database: {str(e)}")
+        return False
 
 
 def save_cheating_logs(
@@ -1062,6 +1215,7 @@ async def detect_face_cathi_lop_point(
     # candidate_name: Optional[str] = Form(None, description="Tên của thí sinh (không bắt buộc)"),
     exam_class: str = Form(..., description="Lớp thi của thí sinh"),  # Thêm lớp thi
     exam_shift: str = Form(..., description="Ca thi của thí sinh"),   # Thêm ca thi
+    user_quiz_attempt_id: Optional[int] = Form(None, description="ID của quiz attempt trong database (để lưu violations)"),
     file: UploadFile = File(..., description="Ảnh của thí sinh")
 ):
     # Kiểm tra định dạng ảnh
@@ -1230,6 +1384,27 @@ async def detect_face_cathi_lop_point(
                 detect_result=detect_result,
                 point=True,
             )
+
+            # ✅ Lưu violations vào database nếu có user_quiz_attempt_id
+            if user_quiz_attempt_id:
+                try:
+                    # Tạo evidence URL (relative path hoặc full URL)
+                    evidence_url = f"/get_cheating_image/{os.path.relpath(saved_image_path, CHEATING_IMAGE_DIR).replace(os.sep, '/')}"
+                    
+                    # Map detect_result sang violations
+                    violations = map_detect_result_to_violations(
+                        detect_result=detect_result,
+                        user_quiz_attempt_id=user_quiz_attempt_id,
+                        evidence_url=evidence_url
+                    )
+                    
+                    # Lưu vào database
+                    if violations:
+                        await save_violations_to_db(violations, use_batch=True)
+                        logger.info(f"Saved {len(violations)} violation(s) to database for attempt {user_quiz_attempt_id}")
+                except Exception as db_error:
+                    logger.error(f"Error saving violations to database: {str(db_error)}")
+                    # Không raise exception, chỉ log lỗi để không ảnh hưởng đến response
 
             # ✅ Ghi log CSV
             timestamp_csv = now_vietnam.strftime("%Y%m%d")

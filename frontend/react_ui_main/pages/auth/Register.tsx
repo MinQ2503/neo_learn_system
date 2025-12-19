@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
-import ClayCard from '../components/ClayCard';
-import ClayButton from '../components/ClayButton';
-import { Role } from '../types';
-import { authService } from '../services/api/authService';
-import { isApiSuccess } from '../services/api/base';
+import ClayCard from '../../components/ClayCard';
+import ClayButton from '../../components/ClayButton';
+import { Role } from '../../types';
+import { authService } from '../../services/api/authService';
+import { isApiSuccess } from '../../services/api/base';
 import { User, Mail, Lock, UserPlus, AlertCircle, ArrowLeft, GraduationCap, Phone, Calendar, FileText, Upload } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -238,3 +238,4 @@ const Register: React.FC = () => {
 };
 
 export default Register;
+

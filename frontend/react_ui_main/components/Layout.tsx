@@ -20,33 +20,23 @@ const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      const response = await authService.logout();
-      
-      if (isApiSuccess(response)) {
-        // Logout successful - clear local storage
-        clearRole();
-        localStorage.removeItem('user');
-        
-        // Navigate to login page
-        navigate('/');
-        window.location.reload();
-      } else {
-        // Even if API fails, clear local data
-        clearRole();
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        navigate('/');
-        window.location.reload();
-      }
+      // Call logout API
+      await authService.logout();
     } catch (error: any) {
-      // On error, still clear local data and navigate
+      // Log error but continue with logout process
       console.error('Logout error:', error);
+    } finally {
+      // Always clear local data and navigate to login
+      // (authService already clears token, but we ensure everything is cleared)
       clearRole();
       localStorage.removeItem('user');
       localStorage.removeItem('token');
+      
+      // Navigate to login page
       navigate('/');
+      // Reload to reset app state
       window.location.reload();
-    } finally {
+      
       setLoggingOut(false);
     }
   };

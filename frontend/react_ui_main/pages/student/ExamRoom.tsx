@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import ClayCard from '../components/ClayCard';
-import ClayButton from '../components/ClayButton';
+import ClayCard from '../../components/ClayCard';
+import ClayButton from '../../components/ClayButton';
 import { Clock, Wifi, AlertTriangle, EyeOff, MessageCircle } from 'lucide-react';
 
 const ExamRoom: React.FC = () => {
@@ -132,3 +132,4 @@ const ExamRoom: React.FC = () => {
 };
 
 export default ExamRoom;
+

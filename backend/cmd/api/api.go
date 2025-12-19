@@ -8,6 +8,7 @@ import (
 	config "github.com/MinQ2503/neo_learn_system/backend/configs"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/auth"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/user"
+	"github.com/MinQ2503/neo_learn_system/backend/internal/services/violation"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -54,6 +55,11 @@ func (s *APIServer) Run() error {
 	userRepoV2 := user.NewUserRepository(s.db)
 	userService := user.NewUserService(userRepoV2)
 	userHandler := user.NewUserHandler(userService)
+
+	// Initialize violation service
+	violationRepo := violation.NewViolationRepository(s.db)
+	violationService := violation.NewViolationService(violationRepo)
+	violationHandler := violation.NewViolationHandler(violationService)
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -137,6 +143,22 @@ func (s *APIServer) Run() error {
 			adminRoutes.GET("/:id", userHandler.GetAdmin)
 			adminRoutes.PUT("/:id", userHandler.UpdateAdmin)
 			adminRoutes.DELETE("/:id", userHandler.DeleteAdmin)
+		}
+
+		// Violation routes (for anti-cheating service)
+		// These routes can be called by the Python anti-cheating service
+		violationRoutes := v1.Group("/violations")
+		{
+			// Create single violation (called by Python service)
+			violationRoutes.POST("", violationHandler.CreateViolation)
+			// Create multiple violations at once
+			violationRoutes.POST("/batch", violationHandler.CreateViolationsBatch)
+			// Get violations by attempt ID
+			violationRoutes.GET("/attempt/:attempt_id", violationHandler.GetViolationsByAttemptID)
+			// Get violation by ID
+			violationRoutes.GET("/:id", violationHandler.GetViolationByID)
+			// Count violations for an attempt
+			violationRoutes.GET("/attempt/:attempt_id/count", violationHandler.CountViolationsByAttemptID)
 		}
 	}
 

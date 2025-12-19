@@ -1,7 +1,7 @@
 import React from 'react';
-import Layout from '../components/Layout';
-import ClayCard from '../components/ClayCard';
-import { Role } from '../types';
+import Layout from '../../components/Layout';
+import ClayCard from '../../components/ClayCard';
+import { Role } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Download, FileText, Settings, Users } from 'lucide-react';
 
@@ -126,3 +126,4 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard;
+

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import Layout from '../components/Layout';
-import ClayCard from '../components/ClayCard';
-import { Role, StudentStatus, Violation, ViolationType, Severity } from '../types';
-import { MOCK_STUDENTS, generateMockViolation } from '../services/mockService';
+import Layout from '../../components/Layout';
+import ClayCard from '../../components/ClayCard';
+import { Role, StudentStatus, Violation, ViolationType, Severity } from '../../types';
+import { MOCK_STUDENTS, generateMockViolation } from '../../services/mockService';
 import { AlertTriangle, User, Eye, Battery, Monitor, MoreVertical, X } from 'lucide-react';
 
 // Sub-components for better organization
@@ -213,3 +213,4 @@ const TeacherDashboard: React.FC = () => {
 };
 
 export default TeacherDashboard;
+

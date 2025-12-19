@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import ClayCard from '../components/ClayCard';
-import ClayButton from '../components/ClayButton';
-import { Role } from '../types';
+import ClayCard from '../../components/ClayCard';
+import ClayButton from '../../components/ClayButton';
+import { Role } from '../../types';
 import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
-import { authService } from '../services/api/authService';
-import { isApiSuccess } from '../services/api/base';
+import { authService } from '../../services/api/authService';
+import { isApiSuccess } from '../../services/api/base';
+import { setRoleToStorage } from '../../services/mockService';
 
 interface LoginProps {
   onLogin: (role: Role) => void;
@@ -45,6 +46,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         
         // Store user info in localStorage
         localStorage.setItem('user', JSON.stringify(user));
+        
+        // Store role in localStorage for persistence across reloads
+        setRoleToStorage(userRole);
         
         // Call onLogin callback
         onLogin(userRole);
