@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentClasses from './pages/student/StudentClasses';
 import StudentClassDetail from './pages/student/StudentClassDetail';
@@ -43,6 +44,10 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={
             !userRole ? <Login onLogin={handleLogin} /> : <Navigate to={`/${userRole.toLowerCase()}`} />
+        } />
+        
+        <Route path="/register" element={
+            !userRole ? <Register /> : <Navigate to={`/${userRole.toLowerCase()}`} />
         } />
         
         {/* Student Routes */}
