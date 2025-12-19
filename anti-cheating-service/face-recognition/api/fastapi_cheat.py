@@ -88,13 +88,35 @@ facedetector = CheatingDetector(
         # model_spoofing=r"G:\Datas\Python_Workspace\practical-fastapi\face-recognition\api\resources\anti_spoof_models"
         )
 
-# Middleware CORS nếu cần mở rộng hệ thống sau này
+# Middleware CORS - Fixed strict-origin-when-cross-origin error
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:8080",  # Go backend
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_headers=[
+        "Origin",
+        "Content-Type",
+        "Accept",
+        "Authorization",
+        "X-Requested-With",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+    ],
+    expose_headers=[
+        "Content-Length",
+        "Content-Type",
+        "Authorization",
+    ],
+    max_age=3600,
 )
 
 
