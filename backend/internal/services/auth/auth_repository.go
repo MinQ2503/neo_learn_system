@@ -128,6 +128,16 @@ func (r *UserRepository) GetProfileByUserID(userID int64) (*models.Profile, erro
 	return profile, nil
 }
 
+// GetUserNameByID gets user's name by ID
+func (r *UserRepository) GetNameByID(userID int64) (string, error) {
+	var name string
+	err := r.db.QueryRow(
+		"SELECT name FROM users WHERE id = ?",
+		userID,
+	).Scan(&name)
+	return name, err
+}
+
 // FindByID finds a user by ID
 func (r *UserRepository) FindByID(id int64) (*models.User, error) {
 	user := &models.User{}
@@ -236,5 +246,23 @@ func (r *UserRepository) Update(user *models.User) error {
 		return fmt.Errorf("error updating user: %w", err)
 	}
 
+	return nil
+}
+
+// Update avatar URL
+func (r *UserRepository) UpdateAvatar(tx *sql.Tx, userID int64, avatarURL string) error {
+	query := `UPDATE profiles SET avatar = ? WHERE user_id = ?`
+
+	var execCtx Execer
+	if tx != nil {
+		execCtx = tx
+	} else {
+		execCtx = r.db
+	}
+
+	_, err := execCtx.Exec(query, avatarURL, userID)
+	if err != nil {
+		return fmt.Errorf("error updating avatar: %w", err)
+	}
 	return nil
 }

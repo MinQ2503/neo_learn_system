@@ -354,3 +354,46 @@ func (s *UserService) DeleteAdmin(id int64) error {
 	}
 	return s.repo.Delete(id)
 }
+
+// func (s *UserService) UploadProfileImage(userID int64, file *multipart.FileHeader) (string, error) {
+// 	name, err := s.repo.GetNameByID(userID)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	normalizedName := utils.NormalizeString(name)
+// 	folderName := fmt.Sprintf("%d_%s", userID, normalizedName)
+
+// 	// Define upload path relative to project root
+// 	uploadDir := filepath.Join("internal", "database", "images", "profile_image_users", folderName)
+
+// 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+// 		return "", err
+// 	}
+
+// 	dst := filepath.Join(uploadDir, file.Filename)
+
+// 	src, err := file.Open()
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer src.Close()
+
+// 	out, err := os.Create(dst)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer out.Close()
+
+// 	if _, err = io.Copy(out, src); err != nil {
+// 		return "", err
+// 	}
+
+// 	// Save path to DB
+// 	dbPath := filepath.ToSlash(dst)
+// 	if err := s.repo.UpdateProfileAvatar(userID, dbPath); err != nil {
+// 		return "", err
+// 	}
+
+// 	return dbPath, nil
+// }

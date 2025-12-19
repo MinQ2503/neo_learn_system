@@ -341,3 +341,41 @@ func (h *UserHandler) DeleteAdmin(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Admin deleted successfully"})
 }
+
+// func (h *UserHandler) UploadProfileImage(c *gin.Context) {
+// 	// Get user ID from context (set by auth middleware)
+// 	userIDInterface, exists := c.Get("userID")
+// 	if !exists {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+// 		return
+// 	}
+// 	userID := userIDInterface.(int64)
+
+// 	// Parse file
+// 	file, err := c.FormFile("file")
+// 	if err != nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+// 		return
+// 	}
+
+// 	// Validate file size (5MB limit)
+// 	if file.Size > 5*1024*1024 {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "File size exceeds 5MB limit"})
+// 		return
+// 	}
+
+// 	// Validate file type
+// 	contentType := file.Header.Get("Content-Type")
+// 	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/jpg" {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Only JPEG and PNG images are allowed"})
+// 		return
+// 	}
+
+// 	path, err := h.service.UploadProfileImage(userID, file)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{"message": "Profile image uploaded successfully", "path": path})
+// }

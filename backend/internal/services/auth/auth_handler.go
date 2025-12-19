@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"mime/multipart"
 	"net/http"
 	"strconv"
 
@@ -40,7 +41,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.Register(&req)
+	// Lấy avatar từ form-data (nếu có)
+	var avatarFile *multipart.FileHeader
+	file, err := c.FormFile("avatar")
+	if err == nil {
+		avatarFile = file
+	}
+
+	user, err := h.authService.Register(&req, avatarFile)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -249,5 +257,47 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		"success": true,
 		"message": "Logout successful",
 		"data":    userInfo,
+	})
+}
+
+func (h *AuthHandler) UploadAvatar(c *gin.Context) {
+	// 1️⃣ Lấy user_id từ form-data
+	userIDParam := c.Param("user_id")
+	userID, err := strconv.ParseInt(userIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "invalid user_id",
+		})
+		return
+	}
+
+	// 2️⃣ Lấy file avatar từ form-data
+	avatarFile, err := c.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "avatar file is required",
+		})
+		return
+	}
+
+	// 3️⃣ Cập nhật avatar thông qua service
+	avatarURL, err := h.authService.UpdateAvatar(nil, userID, avatarFile)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// 4️⃣ Trả về kết quả
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Avatar uploaded successfully",
+		"data": gin.H{
+			"avatar": avatarURL,
+		},
 	})
 }

@@ -87,6 +87,39 @@ func (r *UserRepository) AssignRole(tx *sql.Tx, userID int64, roleName string) e
 	return err
 }
 
+func (r *UserRepository) GetNameByID(id int64) (string, error) {
+	var name string
+	query := `SELECT name FROM users WHERE id = ?`
+	err := r.db.QueryRow(query, id).Scan(&name)
+	if err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+func (r *UserRepository) UpdateProfileAvatar(userID int64, avatarPath string) error {
+	query := `
+		UPDATE profiles 
+		SET avatar = ?, updated_at = NOW() 
+		WHERE user_id = ?
+	`
+	result, err := r.db.Exec(query, avatarPath, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		// If profile doesn't exist, create it
+		query = `INSERT INTO profiles (user_id, avatar, created_at, updated_at) VALUES (?, ?, NOW(), NOW())`
+		_, err = r.db.Exec(query, userID, avatarPath)
+		return err
+	}
+	return nil
+}
+
 func (r *UserRepository) GetUsersByRole(roleName string) ([]models.User, error) {
 	query := `
 		SELECT u.id, u.name, u.email, u.status, u.created_at, u.updated_at,

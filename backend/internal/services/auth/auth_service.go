@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"database/sql"
 	"errors"
+	"mime/multipart"
 	"time"
 
 	"github.com/MinQ2503/neo_learn_system/backend/internal/models"
@@ -21,7 +23,7 @@ func NewAuthService(userRepo *UserRepository, jwtExpiration time.Duration) *Auth
 }
 
 // Register creates a new user account
-func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error) {
+func (s *AuthService) Register(req *models.RegisterRequest, avatarFile *multipart.FileHeader) (*models.User, error) {
 	// Check if user already exists
 	existingUser, err := s.userRepo.FindByEmail(req.Email)
 	if err != nil {
@@ -87,18 +89,19 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error
 	if req.BirthDay != nil {
 		profile.BirthDay = *req.BirthDay
 	}
-	// if req.Avatar != nil {
-	// 	avatarURL, err := s.fileService.SaveAvatar(req.Avatar, user.ID)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	profile.Avatar = avatarURL
-	// }
 	if err = s.userRepo.CreateProfile(tx, profile); err != nil {
 		return nil, err
 	}
 
 	user.Profile = profile
+
+	// if avatarFile != nil {
+	// 	avatarURL, err := s.UpdateAvatar(tx, user.ID, avatarFile)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	user.Profile.Avatar = avatarURL
+	// }
 
 	// 4️⃣ Commit
 	if err = tx.Commit(); err != nil {
@@ -195,7 +198,7 @@ func (s *AuthService) GetUserByID(userID int64) (*models.UserInfo, error) {
 		Email: user.Email,
 		Roles: roles,
 	}
-	
+
 	if user.Profile != nil {
 		resp.Profile = &models.Profile{
 			Bio:      user.Profile.Bio,
@@ -232,4 +235,31 @@ func (s *AuthService) ChangePassword(userID int64, req *models.ChangePasswordReq
 
 	// Update password
 	return s.userRepo.UpdatePassword(userID, hashedPassword)
+}
+
+// GetUserName by ID
+func (s *AuthService) GetUserNameByID(userID int64) (string, error) {
+	return s.userRepo.GetNameByID(userID)
+}
+
+// UpdateAvatar cập nhật avatar của user
+func (s *AuthService) UpdateAvatar(tx *sql.Tx, userID int64, avatarFile *multipart.FileHeader) (string, error) {
+	// 1️⃣ Lấy tên user
+	userName, err := s.GetUserNameByID(userID)
+	if err != nil {
+		return "", err
+	}
+
+	// 2️⃣ Lưu file lên server
+	avatarURL, err := utils.SaveUserAvatar(userID, userName, avatarFile)
+	if err != nil {
+		return "", err
+	}
+
+	// 3️⃣ Update avatar path vào DB
+	if err := s.userRepo.UpdateAvatar(tx, userID, avatarURL); err != nil {
+		return "", err
+	}
+
+	return avatarURL, nil
 }

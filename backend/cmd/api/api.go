@@ -65,6 +65,7 @@ func (s *APIServer) Run() error {
 			authRoutes.POST("/login", authHandler.Login)
 			authRoutes.GET("/profile/:user_id", authHandler.GetProfile)
 			authRoutes.POST("/change-password/:user_id", authHandler.ChangePassword)
+			authRoutes.POST("/update-avatar/:user_id", authHandler.UploadAvatar)
 
 			// Protected routes
 			protected := authRoutes.Group("")
@@ -74,6 +75,13 @@ func (s *APIServer) Run() error {
 				// protected.POST("/change-password", authHandler.ChangePassword)
 				protected.POST("/logout", authHandler.Logout)
 			}
+		}
+
+		// User common routes
+		userRoutes := v1.Group("/users")
+		userRoutes.Use(auth.AuthMiddleware())
+		{
+			// userRoutes.POST("/upload-avatar", userHandler.UploadProfileImage)
 		}
 
 		// Student management routes
@@ -142,6 +150,7 @@ func (s *APIServer) Run() error {
 
 	// Serve static files
 	router.Static("/static", "./static")
+	router.Static("/images", "./internal/database/images")
 
 	log.Printf("Server starting on %s in %s mode", s.addr, config.Envs.Server.GinMode)
 	return router.Run(s.addr)
