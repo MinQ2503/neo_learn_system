@@ -3,13 +3,27 @@ import type { ApiResponse } from './types';
 
 // Get BASE_URL from environment variables
 // In Vite, environment variables must be prefixed with VITE_ to be accessible
-export const BASE_URL = import.meta.env.VITE_BASE_URL || import.meta.env.BASE_URL || 'http://localhost:8080';
+// Note: import.meta.env.BASE_URL is a relative path (like '/'), not a full URL, so we don't use it
+export const BASE_URL = import.meta.env.VITE_BASE_URL || 'http://localhost:8080';
 
 // API prefix - có thể thay đổi từ .env nếu cần
 export const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api/v1';
 
 // Combine BASE_URL and API_PREFIX
-const API_BASE_URL = `${BASE_URL}${API_PREFIX}`;
+// Ensure BASE_URL doesn't end with '/' and API_PREFIX starts with '/'
+const normalizedBaseUrl = BASE_URL.endsWith('/') ? BASE_URL.slice(0, -1) : BASE_URL;
+const normalizedApiPrefix = API_PREFIX.startsWith('/') ? API_PREFIX : `/${API_PREFIX}`;
+const API_BASE_URL = `${normalizedBaseUrl}${normalizedApiPrefix}`;
+
+// Validate URL to prevent "Invalid URL" errors
+try {
+  new URL(API_BASE_URL);
+} catch (error) {
+  console.error('Invalid API_BASE_URL:', API_BASE_URL);
+  console.error('BASE_URL:', BASE_URL);
+  console.error('API_PREFIX:', API_PREFIX);
+  throw new Error(`Invalid API base URL: ${API_BASE_URL}. Please set VITE_BASE_URL in your .env file (e.g., VITE_BASE_URL=http://localhost:8080)`);
+}
 
 // Create axios instance with base configuration
 export const apiClient: AxiosInstance = axios.create({
@@ -23,11 +37,11 @@ export const apiClient: AxiosInstance = axios.create({
 // Request interceptor (optional - for adding auth tokens, etc.)
 apiClient.interceptors.request.use(
   (config) => {
-    // You can add auth token here if needed
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    // Add auth token to all requests if available
+    const token = localStorage.getItem('token');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {

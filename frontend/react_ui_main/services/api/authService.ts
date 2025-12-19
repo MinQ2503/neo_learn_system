@@ -14,22 +14,29 @@ import type {
   ChangePasswordResponse,
   UploadAvatarResponse,
   LogoutResponse,
+  LogoutResponseData,
 } from './types';
 
 export const authService = {
   /**
    * Register a new user
+   * Supports both form-data (with file) and JSON
    */
   register: async (data: RegisterRequest): Promise<RegisterResponse> => {
     try {
-      // If avatar is a File, use FormData
-      if (data.avatar instanceof File) {
+      // If avatar is a File or any optional field exists, use FormData
+      if (data.avatar instanceof File || data.bio || data.phone || data.birth_day) {
         const formData = new FormData();
         formData.append('name', data.name);
         formData.append('email', data.email);
         formData.append('password', data.password);
         if (data.role) formData.append('role', data.role);
-        formData.append('avatar', data.avatar);
+        if (data.bio) formData.append('bio', data.bio);
+        if (data.phone) formData.append('phone', data.phone);
+        if (data.birth_day) formData.append('birth_day', data.birth_day);
+        if (data.avatar instanceof File) {
+          formData.append('avatar', data.avatar);
+        }
 
         const response = await post<RegisterResponse['data']>('/auth/register', formData, {
           headers: {
@@ -123,18 +130,22 @@ export const authService = {
 
   /**
    * Logout user
+   * Returns user roles and profile information
    */
   logout: async (): Promise<LogoutResponse> => {
     try {
-      const response = await post<LogoutResponse['data']>('/auth/logout');
+      // POST request without body (or with empty body)
+      const response = await post<LogoutResponseData>('/auth/logout', null);
       
-      // Remove token on logout
+      // Remove token and user data on logout
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
       
       return response;
     } catch (error: any) {
       // Remove token even if API call fails
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
       throw error.response?.data || error;
     }
   },

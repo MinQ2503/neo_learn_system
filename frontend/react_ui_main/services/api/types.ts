@@ -33,6 +33,9 @@ export interface RegisterRequest {
   email: string;
   password: string;
   role?: string;
+  bio?: string;
+  phone?: string;
+  birth_day?: string; // Format: YYYY-MM-DD
   avatar?: File; // For form-data upload
 }
 
@@ -111,7 +114,21 @@ export interface UploadAvatarResponseData {
 export type UploadAvatarResponse = ApiResponse<UploadAvatarResponseData>;
 
 // Logout Response
-export type LogoutResponse = ApiResponse<ProfileData>;
+export interface LogoutResponseData {
+  roles: string[];
+  profile: {
+    id: number;
+    user_id: number;
+    bio?: string;
+    avatar?: string;
+    phone?: string;
+    birthDay?: string;
+    created_at?: string;
+    updated_at?: string;
+  };
+}
+
+export type LogoutResponse = ApiResponse<LogoutResponseData>;
 
 // ==================== HELPER TYPES ====================
 

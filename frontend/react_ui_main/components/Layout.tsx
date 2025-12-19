@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { clearRole } from '../services/mockService';
+import { authService } from '../services/api/authService';
+import { isApiSuccess } from '../services/api/base';
 import { LogOut, LayoutDashboard, ShieldCheck, PieChart, Users, BookOpen, Layers, ClipboardList, FileText, School } from 'lucide-react';
 import { Role } from '../types';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,11 +15,40 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleLogout = () => {
-    clearRole();
-    window.location.hash = '/';
-    window.location.reload();
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      const response = await authService.logout();
+      
+      if (isApiSuccess(response)) {
+        // Logout successful - clear local storage
+        clearRole();
+        localStorage.removeItem('user');
+        
+        // Navigate to login page
+        navigate('/');
+        window.location.reload();
+      } else {
+        // Even if API fails, clear local data
+        clearRole();
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        navigate('/');
+        window.location.reload();
+      }
+    } catch (error: any) {
+      // On error, still clear local data and navigate
+      console.error('Logout error:', error);
+      clearRole();
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      navigate('/');
+      window.location.reload();
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   const navItem = (path: string, icon: React.ReactNode, label: string) => (
@@ -76,10 +107,11 @@ const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
         <div className="p-4 border-t border-gray-200">
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-50 transition-colors"
+            disabled={loggingOut}
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <LogOut size={20} />
-            <span className="font-medium">Sign Out</span>
+            <span className="font-medium">{loggingOut ? 'Đang đăng xuất...' : 'Sign Out'}</span>
           </button>
         </div>
       </aside>
