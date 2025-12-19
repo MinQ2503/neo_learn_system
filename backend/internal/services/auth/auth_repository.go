@@ -15,49 +15,64 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+func (r *UserRepository) BeginTx() (*sql.Tx, error) {
+	return r.db.Begin()
+}
+
 // Create creates a new user
-func (r *UserRepository) Create(user *models.User) error {
+func (r *UserRepository) Create(ctx Execer, user *models.User) error {
 	query := `
-		INSERT INTO users (name, email, password, status)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO users (name, email, password)
+		VALUES (?, ?, ?)
 	`
 
-	result, err := r.db.Exec(
-		query,
-		user.Name,
-		user.Email,
-		user.Password,
-		1, // status = 1 (active)
-	)
+	result, err := ctx.Exec(query, user.Name, user.Email, user.Password)
 
 	if err != nil {
-		return fmt.Errorf("error creating user: %w", err)
+		return err
 	}
 
-	userID, err := result.LastInsertId()
+	id, err := result.LastInsertId()
 	if err != nil {
-		return fmt.Errorf("error getting last insert id: %w", err)
+		return err
 	}
-	user.ID = userID
-
-	// Create default profile
-	profileQuery := `
-		INSERT INTO profiles (user_id, bio, avatar, phone)
-		VALUES (?, '', '', '')
-	`
-	_, err = r.db.Exec(profileQuery, user.ID)
-	if err != nil {
-		return fmt.Errorf("error creating user profile: %w", err)
-	}
+	user.ID = id
 
 	return nil
+}
+
+// CreateProfile creates a profile for a user
+func (r *UserRepository) CreateProfile(ctx Execer, profile *models.Profile) error {
+	query := `
+		INSERT INTO profiles (user_id, bio, avatar, phone, birthDay)
+		VALUES (?, ?, ?, ?, ?)
+	`
+	_, err := ctx.Exec(
+		query,
+		profile.UserID,
+		profile.Bio,
+		profile.Avatar,
+		profile.Phone,
+		profile.BirthDay,
+	)
+	return err
+}
+
+// AssignRole assigns a role to a user
+func (r *UserRepository) AssignRole(ctx Execer, userID, roleID int64) error {
+	query := `
+		INSERT INTO user_roles (user_id, role_id)
+		VALUES (?, ?)
+	`
+	_, err := ctx.Exec(query, userID, roleID)
+	return err
 }
 
 // FindByEmail finds a user by email
 func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, name, email, email_verified_at, password, remember_token, status, created_at, updated_at
+		SELECT id, name, email, email_verified_at, password, remember_token, created_at, updated_at
 		FROM users
 		WHERE email = ?
 	`
@@ -69,7 +84,6 @@ func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 		&user.EmailVerifiedAt,
 		&user.Password,
 		&user.RememberToken,
-		&user.Status,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -84,11 +98,41 @@ func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 	return user, nil
 }
 
+// GetProfileByUserID gets profile by user ID
+func (r *UserRepository) GetProfileByUserID(userID int64) (*models.Profile, error) {
+	query := `
+		SELECT user_id, bio, avatar, phone, birthDay
+		FROM profiles
+		WHERE user_id = ?
+	`
+
+	profile := &models.Profile{}
+	err := r.db.QueryRow(
+		query,
+		userID,
+	).Scan(
+		&profile.UserID,
+		&profile.Bio,
+		&profile.Avatar,
+		&profile.Phone,
+		&profile.BirthDay,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
 // FindByID finds a user by ID
 func (r *UserRepository) FindByID(id int64) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, name, email, email_verified_at, password, remember_token, status, created_at, updated_at
+		SELECT id, name, email, email_verified_at, password, remember_token, created_at, updated_at
 		FROM users
 		WHERE id = ?
 	`
@@ -100,7 +144,6 @@ func (r *UserRepository) FindByID(id int64) (*models.User, error) {
 		&user.EmailVerifiedAt,
 		&user.Password,
 		&user.RememberToken,
-		&user.Status,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -142,31 +185,16 @@ func (r *UserRepository) GetUserRoles(userID int64) ([]string, error) {
 	return roles, nil
 }
 
-// AssignRole assigns a role to a user
-func (r *UserRepository) AssignRole(userID, roleID int64) error {
-	query := `
-		INSERT IGNORE INTO user_roles (user_id, role_id)
-		VALUES (?, ?)
-	`
-
-	_, err := r.db.Exec(query, userID, roleID)
-	if err != nil {
-		return fmt.Errorf("error assigning role: %w", err)
-	}
-
-	return nil
-}
-
 // GetRoleByName gets a role by name
 func (r *UserRepository) GetRoleByName(name string) (*models.Role, error) {
 	role := &models.Role{}
-	query := `SELECT id, name, description, created_at FROM roles WHERE name = ?`
+	query := `SELECT id, name, created_at, updated_at FROM roles WHERE name = ?`
 
 	err := r.db.QueryRow(query, name).Scan(
 		&role.ID,
 		&role.Name,
-		&role.Description,
 		&role.CreatedAt,
+		&role.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {

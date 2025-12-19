@@ -1,6 +1,7 @@
 package models
 
 import (
+	"mime/multipart"
 	"time"
 )
 
@@ -11,23 +12,23 @@ type User struct {
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty" db:"email_verified_at"`
 	Password        string     `json:"-" db:"password"`
 	RememberToken   *string    `json:"-" db:"remember_token"`
-	Status          int8       `json:"status" db:"status"`
 	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
+	Profile         *Profile   `json:"profile,omitempty" db:"-"`
 }
 
 type Role struct {
-	ID          int64     `json:"id" db:"id"`
-	Name        string    `json:"name" db:"name"`
-	Description *string   `json:"description,omitempty" db:"description"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	ID        int64     `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type Permission struct {
 	ID        int64     `json:"id" db:"id"`
 	Name      string    `json:"name" db:"name"`
-	Action    string    `json:"action" db:"action"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type Profile struct {
@@ -36,7 +37,7 @@ type Profile struct {
 	Bio       string    `json:"bio" db:"bio"`
 	Avatar    string    `json:"avatar" db:"avatar"`
 	Phone     string    `json:"phone" db:"phone"`
-	BirthDay  time.Time `json:"birth_day" db:"birth_day"`
+	BirthDay  time.Time `json:"birthDay" db:"birthDay"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -46,6 +47,7 @@ type UserRole struct {
 	UserID    int64     `json:"user_id" db:"user_id"`
 	RoleID    int64     `json:"role_id" db:"role_id"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type RolePermission struct {
@@ -58,14 +60,23 @@ type RolePermission struct {
 
 // DTOs for API requests/responses
 type RegisterRequest struct {
-	Name     string `json:"name" binding:"required,min=2,max=100"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	// User
+	Name     string `json:"name" form:"name" binding:"required,min=2,max=100"`
+	Email    string `json:"email" form:"email" binding:"required,email"`
+	Password string `json:"password" form:"password" binding:"required,min=6"`
+
+	// Profile
+	Bio      string     `json:"bio,omitempty" form:"bio"`
+	Phone    string     `json:"phone,omitempty" form:"phone"`
+	BirthDay *time.Time `json:"birth_day,omitempty" form:"birth_day" time_format:"2006-01-02"`
+
+	// Avatar (form-data)
+	Avatar *multipart.FileHeader `form:"avatar" json:"-"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email" form:"email" binding:"required,email"`
+	Password string `json:"password" form:"password" binding:"required"`
 }
 
 type LoginResponse struct {
@@ -74,15 +85,16 @@ type LoginResponse struct {
 }
 
 type UserInfo struct {
-	ID    int64    `json:"id"`
-	Name  string   `json:"name"`
-	Email string   `json:"email"`
-	Roles []string `json:"roles"`
+	ID      int64    `json:"id"`
+	Name    string   `json:"name"`
+	Email   string   `json:"email"`
+	Roles   []string `json:"roles"`
+	Profile *Profile `json:"profile"`
 }
 
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=6"`
+	OldPassword string `json:"old_password" form:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" form:"new_password" binding:"required,min=6"`
 }
 
 // CRUD Teacher

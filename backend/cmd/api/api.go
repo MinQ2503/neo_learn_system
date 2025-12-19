@@ -50,10 +50,10 @@ func (s *APIServer) Run() error {
 	authService := auth.NewAuthService(userRepo, time.Second*config.Envs.JWT.ExpirationInSeconds)
 	authHandler := auth.NewAuthHandler(authService)
 
-	// Initialize user service (for student management)
-	studentRepo := user.NewUserRepository(s.db)
-	studentService := user.NewUserService(studentRepo)
-	studentHandler := user.NewUserHandler(studentService)
+	// Initialize user service (for user management)
+	userRepoV2 := user.NewUserRepository(s.db)
+	userService := user.NewUserService(userRepoV2)
+	userHandler := user.NewUserHandler(userService)
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -63,27 +63,72 @@ func (s *APIServer) Run() error {
 		{
 			authRoutes.POST("/register", authHandler.Register)
 			authRoutes.POST("/login", authHandler.Login)
+			authRoutes.GET("/profile/:user_id", authHandler.GetProfile)
+			authRoutes.POST("/change-password/:user_id", authHandler.ChangePassword)
 
 			// Protected routes
 			protected := authRoutes.Group("")
 			protected.Use(auth.AuthMiddleware())
 			{
-				protected.GET("/profile", authHandler.GetProfile)
-				protected.POST("/change-password", authHandler.ChangePassword)
+				// protected.GET("/profile", authHandler.GetProfile)
+				// protected.POST("/change-password", authHandler.ChangePassword)
 				protected.POST("/logout", authHandler.Logout)
 			}
 		}
 
-		// Student management routes (Teacher only)
+		// Student management routes
 		studentRoutes := v1.Group("/students")
 		studentRoutes.Use(auth.AuthMiddleware())
-		studentRoutes.Use(auth.RoleMiddleware("teacher"))
+
+		// Routes for Admin and Instructor (Create, List, Delete)
+		manageRoutes := studentRoutes.Group("")
+		manageRoutes.Use(auth.RoleMiddleware("admin", "instructor"))
 		{
-			studentRoutes.POST("", studentHandler.CreateStudent)
-			studentRoutes.GET("", studentHandler.GetStudents)
-			studentRoutes.GET("/:id", studentHandler.GetStudent)
-			studentRoutes.PUT("/:id", studentHandler.UpdateStudent)
-			studentRoutes.DELETE("/:id", studentHandler.DeleteStudent)
+			manageRoutes.POST("", userHandler.CreateStudent)
+			manageRoutes.GET("", userHandler.GetStudents)
+			manageRoutes.DELETE("/:id", userHandler.DeleteStudent)
+		}
+
+		// Routes for Admin, Instructor and Student (Get, Update)
+		// Logic in handler will ensure students can only access their own data
+		commonRoutes := studentRoutes.Group("")
+		commonRoutes.Use(auth.RoleMiddleware("admin", "instructor", "student"))
+		{
+			commonRoutes.GET("/:id", userHandler.GetStudent)
+			commonRoutes.PUT("/:id", userHandler.UpdateStudent)
+		}
+
+		// Instructor management routes
+		instructorRoutes := v1.Group("/instructors")
+		instructorRoutes.Use(auth.AuthMiddleware())
+
+		// Admin only for Create, List, Delete
+		instructorManageRoutes := instructorRoutes.Group("")
+		instructorManageRoutes.Use(auth.RoleMiddleware("admin"))
+		{
+			instructorManageRoutes.POST("", userHandler.CreateInstructor)
+			instructorManageRoutes.GET("", userHandler.GetInstructors)
+			instructorManageRoutes.DELETE("/:id", userHandler.DeleteInstructor)
+		}
+
+		// Admin and Instructor (self) for Get, Update
+		instructorCommonRoutes := instructorRoutes.Group("")
+		instructorCommonRoutes.Use(auth.RoleMiddleware("admin", "instructor"))
+		{
+			instructorCommonRoutes.GET("/:id", userHandler.GetInstructor)
+			instructorCommonRoutes.PUT("/:id", userHandler.UpdateInstructor)
+		}
+
+		// Admin management routes
+		adminRoutes := v1.Group("/admins")
+		adminRoutes.Use(auth.AuthMiddleware())
+		adminRoutes.Use(auth.RoleMiddleware("admin"))
+		{
+			adminRoutes.POST("", userHandler.CreateAdmin)
+			adminRoutes.GET("", userHandler.GetAdmins)
+			adminRoutes.GET("/:id", userHandler.GetAdmin)
+			adminRoutes.PUT("/:id", userHandler.UpdateAdmin)
+			adminRoutes.DELETE("/:id", userHandler.DeleteAdmin)
 		}
 	}
 

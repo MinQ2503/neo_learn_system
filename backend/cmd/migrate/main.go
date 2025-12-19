@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 
 	config "github.com/MinQ2503/neo_learn_system/backend/configs"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/database"
@@ -33,7 +34,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Tạo migration instance
 	m, err := migrate.NewWithDatabaseInstance(
 		"file://cmd/migrate/migrations",
 		"mysql",
@@ -46,21 +46,43 @@ func main() {
 	v, d, _ := m.Version()
 	log.Printf("Version: %d, dirty: %v", v, d)
 
-	// Lấy command cuối cùng từ args: up hoặc down
-	cmd := os.Args[len(os.Args)-1]
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: up | down | force <version>")
+	}
+
+	cmd := os.Args[1]
 
 	switch cmd {
+
 	case "up":
 		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 			log.Fatal(err)
 		}
 		log.Println("Migration UP applied successfully")
+
 	case "down":
 		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
 			log.Fatal(err)
 		}
 		log.Println("Migration DOWN applied successfully")
+
+	case "force":
+		if len(os.Args) < 3 {
+			log.Fatal("Usage: force <version>")
+		}
+
+		version, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			log.Fatal("Invalid version number")
+		}
+
+		if err := m.Force(version); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("Forced migration version to %d", version)
+
 	default:
-		log.Println("Use 'up' or 'down' as argument")
+		log.Fatal("Unknown command. Use: up | down | force <version>")
 	}
 }

@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hệ Thống Phát Hiện Gian Lận Thi Cử - AI Monitor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .scan-overlay {
+        background: linear-gradient(
+          to bottom,
+          transparent,
+          rgba(59, 130, 246, 0.5),
+          transparent
+        );
+        height: 10%;
+        width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        animation: scan 2s linear infinite;
+        display: none;
+      }
+      @keyframes scan {
+        0% {
+          top: -10%;
+        }
+        100% {
+          top: 110%;
+        }
+      }
+      .drag-active {
+        border-color: #3b82f6 !important;
+        background-color: #eff6ff !important;
+      }
+      .fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm border-b border-slate-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16 items-center">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl"
+            >
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <span class="font-bold text-xl text-slate-800">ExamGuard AI</span>
+          </div>
+          <div class="flex gap-4">
+            <span
+              class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium items-center flex gap-2"
+            >
+              <span
+                class="w-2 h-2 bg-green-500 rounded-full animate-pulse"
+              ></span>
+              Hệ thống sẵn sàng
+            </span>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-8 max-w-5xl">
+      <div class="text-center mb-10">
+        <h1 class="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+          Phân Tích Hình Ảnh Giám Sát
+        </h1>
+        <p class="text-slate-500 text-lg">
+          Tải lên hình ảnh từ camera thi cử để AI phát hiện các hành vi bất
+          thường.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Left Column: Upload Form & Results -->
+        <div
+          class="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 relative overflow-hidden min-h-[400px]"
+        >
+          <!-- Upload Form -->
+          <div id="uploadContainer" class="h-full flex flex-col">
+            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+              <i class="fa-solid fa-upload text-blue-500"></i> Tải ảnh lên
+            </h2>
+
+            <form id="uploadForm" class="flex-grow flex flex-col">
+              <!-- Mode Selection -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1"
+                  >Chế độ phân tích</label
+                >
+                <select
+                  id="analysisMode"
+                  class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-slate-50"
+                >
+                  <option value="standard">Cơ bản (Detect)</option>
+                  <option value="pro">Nâng cao (Detect Pro)</option>
+                </select>
+              </div>
+
+              <!-- Pro Fields -->
+              <div
+                id="proFields"
+                class="mb-4 space-y-3 hidden bg-slate-50 p-3 rounded-lg border border-slate-200"
+              >
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1"
+                    >Mã thí sinh (ID) <span class="text-red-500">*</span></label
+                  >
+                  <input
+                    type="text"
+                    id="candidateId"
+                    class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="VD: SV001"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1"
+                    >Tên thí sinh <span class="text-red-500">*</span></label
+                  >
+                  <input
+                    type="text"
+                    id="candidateName"
+                    class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="VD: Nguyen Van A"
+                  />
+                </div>
+              </div>
+
+              <!-- Drop Zone -->
+              <div
+                id="dropZone"
+                class="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 hover:border-blue-400 hover:bg-slate-50 flex-grow relative overflow-hidden group min-h-[200px]"
+              >
+                <input
+                  type="file"
+                  name="file"
+                  id="fileInput"
+                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept="image/*"
+                />
+
+                <div
+                  id="uploadPrompt"
+                  class="pointer-events-none transition-opacity duration-300"
+                >
+                  <div
+                    class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform"
+                  >
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                  </div>
+                  <p class="text-slate-700 font-medium mb-1">
+                    Kéo thả ảnh vào đây
+                  </p>
+                  <p class="text-slate-400 text-sm">
+                    hoặc nhấp để chọn tệp (JPG, PNG)
+                  </p>
+                </div>
+
+                <!-- Image Preview -->
+                <img
+                  id="previewImage"
+                  class="absolute inset-0 w-full h-full object-contain p-2 bg-slate-100 hidden"
+                  alt="Preview"
+                />
+
+                <!-- Scan Overlay -->
+                <div id="scanOverlay" class="scan-overlay"></div>
+              </div>
+
+              <!-- File Info -->
+              <div
+                id="fileInfo"
+                class="mt-4 p-3 bg-slate-50 rounded-lg hidden flex justify-between items-center border border-slate-200"
+              >
+                <div class="flex items-center gap-3 overflow-hidden">
+                  <i class="fa-regular fa-image text-slate-400"></i>
+                  <span
+                    id="fileName"
+                    class="text-sm font-medium text-slate-700 truncate"
+                    >filename.jpg</span
+                  >
+                </div>
+                <button
+                  type="button"
+                  id="removeFileBtn"
+                  class="text-red-500 hover:text-red-700 text-sm p-1"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+
+              <!-- Submit Button -->
+              <button
+                type="submit"
+                id="submitBtn"
+                class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-blue-200"
+                disabled
+              >
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Phân Tích Ngay
+              </button>
+            </form>
+          </div>
+
+          <!-- Results Container (Hidden initially) -->
+          <div
+            id="resultsContainer"
+            class="hidden h-full flex flex-col fade-in"
+          >
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-square-poll-vertical text-blue-500"></i>
+                Kết quả phân tích
+              </h2>
+              <button
+                id="resetBtn"
+                class="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1"
+              >
+                <i class="fa-solid fa-rotate-right"></i> Thử lại
+              </button>
+            </div>
+
+            <div class="flex-grow flex flex-col gap-4">
+              <!-- Result Status Banner -->
+              <div
+                id="resultStatus"
+                class="p-4 rounded-xl text-center font-bold text-lg border shadow-sm"
+              >
+                <!-- Will be populated by JS -->
+              </div>
+
+              <!-- Detailed Metrics -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <div class="text-xs text-slate-500 uppercase font-semibold">
+                    Khuôn mặt
+                  </div>
+                  <div id="resFaces" class="text-lg font-bold text-slate-800">
+                    --
+                  </div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <div class="text-xs text-slate-500 uppercase font-semibold">
+                    Hướng mắt
+                  </div>
+                  <div id="resGaze" class="text-lg font-bold text-slate-800">
+                    --
+                  </div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <div class="text-xs text-slate-500 uppercase font-semibold">
+                    Thiết bị
+                  </div>
+                  <div id="resDevices" class="text-lg font-bold text-slate-800">
+                    --
+                  </div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <div class="text-xs text-slate-500 uppercase font-semibold">
+                    Thời gian xử lý
+                  </div>
+                  <div id="resTime" class="text-lg font-bold text-slate-800">
+                    --
+                  </div>
+                </div>
+              </div>
+
+              <!-- Image with Bounding Boxes (Optional - for now just show original) -->
+              <div
+                class="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-100 flex-grow min-h-[200px]"
+              >
+                <img
+                  id="resultImage"
+                  class="absolute inset-0 w-full h-full object-contain"
+                  alt="Result"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Info & Instructions -->
+        <div class="flex flex-col gap-6">
+          <!-- System Capabilities -->
+          <div
+            class="bg-white p-6 rounded-2xl shadow-md border border-slate-100"
+          >
+            <h3 class="text-lg font-semibold mb-4 text-slate-800">
+              Khả năng phát hiện
+            </h3>
+            <div class="space-y-3">
+              <div
+                class="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-100"
+              >
+                <div class="text-red-500 mt-1">
+                  <i class="fa-solid fa-mobile-screen"></i>
+                </div>
+                <div>
+                  <h4 class="font-medium text-red-700">Thiết bị điện tử</h4>
+                  <p class="text-sm text-red-600/80">
+                    Phát hiện điện thoại, tai nghe, đồng hồ thông minh.
+                  </p>
+                </div>
+              </div>
+              <div
+                class="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-100"
+              >
+                <div class="text-orange-500 mt-1">
+                  <i class="fa-solid fa-user-group"></i>
+                </div>
+                <div>
+                  <h4 class="font-medium text-orange-700">Người lạ mặt</h4>
+                  <p class="text-sm text-orange-600/80">
+                    Phát hiện nhiều hơn 1 người trong khung hình.
+                  </p>
+                </div>
+              </div>
+              <div
+                class="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-100"
+              >
+                <div class="text-yellow-500 mt-1">
+                  <i class="fa-solid fa-eye-slash"></i>
+                </div>
+                <div>
+                  <h4 class="font-medium text-yellow-700">Mất tập trung</h4>
+                  <p class="text-sm text-yellow-600/80">
+                    Phát hiện ánh mắt không nhìn vào màn hình quá lâu.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- System Status Box -->
+          <div
+            class="bg-slate-800 text-white p-6 rounded-2xl shadow-md relative overflow-hidden"
+          >
+            <div class="relative z-10">
+              <h3 class="text-lg font-semibold mb-2 text-slate-200">
+                Trạng thái hệ thống
+              </h3>
+              <div
+                id="systemLog"
+                class="font-mono text-sm space-y-2 text-green-400 h-40 overflow-y-auto"
+              ></div>
+            </div>
+            <!-- Decorative element -->
+            <i
+              class="fa-solid fa-robot absolute -bottom-4 -right-4 text-8xl text-slate-700 opacity-50 transform rotate-12"
+            ></i>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Scripts -->
+    <script>
+      const dropZone = document.getElementById("dropZone");
+      const fileInput = document.getElementById("fileInput");
+      const previewImage = document.getElementById("previewImage");
+      const uploadPrompt = document.getElementById("uploadPrompt");
+      const fileInfo = document.getElementById("fileInfo");
+      const fileName = document.getElementById("fileName");
+      const removeFileBtn = document.getElementById("removeFileBtn");
+      const submitBtn = document.getElementById("submitBtn");
+      const uploadForm = document.getElementById("uploadForm");
+      const scanOverlay = document.getElementById("scanOverlay");
+
+      const uploadContainer = document.getElementById("uploadContainer");
+      const resultsContainer = document.getElementById("resultsContainer");
+      const resetBtn = document.getElementById("resetBtn");
+      const systemLog = document.getElementById("systemLog");
+      const resultImage = document.getElementById("resultImage");
+
+      // Mode & Fields
+      const analysisMode = document.getElementById("analysisMode");
+      const proFields = document.getElementById("proFields");
+      const candidateId = document.getElementById("candidateId");
+      const candidateName = document.getElementById("candidateName");
+
+      // Toggle Pro Fields
+      analysisMode.addEventListener("change", () => {
+        if (analysisMode.value === "pro") {
+          proFields.classList.remove("hidden");
+          addLog("Switched to Pro mode (Requires Candidate Info)");
+        } else {
+          proFields.classList.add("hidden");
+          addLog("Switched to Standard mode");
+        }
+      });
+
+      // Result fields
+      const resultStatus = document.getElementById("resultStatus");
+      const resFaces = document.getElementById("resFaces");
+      const resGaze = document.getElementById("resGaze");
+      const resDevices = document.getElementById("resDevices");
+      const resTime = document.getElementById("resTime");
+
+      // Helper to add log
+      function addLog(message, type = "info") {
+        const p = document.createElement("p");
+        p.textContent = `> ${message}`;
+        if (type === "error") p.className = "text-red-400";
+        else if (type === "warning") p.className = "text-yellow-400";
+        else p.className = "text-green-400";
+
+        systemLog.appendChild(p);
+        systemLog.scrollTop = systemLog.scrollHeight;
+      }
+
+      // Handle Drag & Drop Visuals
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(
+          eventName,
+          () => dropZone.classList.add("drag-active"),
+          false
+        );
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(
+          eventName,
+          () => dropZone.classList.remove("drag-active"),
+          false
+        );
+      });
+
+      // Handle File Drop
+      dropZone.addEventListener("drop", handleDrop, false);
+      fileInput.addEventListener("change", handleFiles, false);
+
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files; // Sync with input
+        handleFiles();
+      }
+
+      function handleFiles() {
+        const files = fileInput.files;
+        if (files.length > 0) {
+          const file = files[0];
+
+          // Update UI
+          fileName.textContent = file.name;
+          fileInfo.classList.remove("hidden");
+          submitBtn.disabled = false;
+
+          // Show Preview
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            previewImage.src = e.target.result;
+            previewImage.classList.remove("hidden");
+            uploadPrompt.classList.add("opacity-0");
+
+            // Also set result image source for later
+            resultImage.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+
+          addLog(`File selected: ${file.name}`);
+        }
+      }
+
+      // Handle Remove File
+      removeFileBtn.addEventListener("click", resetUpload);
+      resetBtn.addEventListener("click", resetUpload);
+
+      function resetUpload() {
+        fileInput.value = "";
+        previewImage.src = "";
+        previewImage.classList.add("hidden");
+        uploadPrompt.classList.remove("opacity-0");
+        fileInfo.classList.add("hidden");
+        submitBtn.disabled = true;
+
+        // Reset views
+        uploadContainer.classList.remove("hidden");
+        resultsContainer.classList.add("hidden");
+
+        // Reset button state
+        submitBtn.innerHTML =
+          '<i class="fa-solid fa-magnifying-glass"></i> Phân Tích Ngay';
+        submitBtn.classList.remove("opacity-75");
+        scanOverlay.style.display = "none";
+
+        addLog("Ready for new analysis.");
+      }
+
+      // Handle Submit
+      uploadForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        // UI Loading State
+        submitBtn.innerHTML =
+          '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang phân tích...';
+        submitBtn.classList.add("opacity-75");
+        submitBtn.disabled = true;
+        scanOverlay.style.display = "block";
+
+        addLog("Uploading image for analysis...");
+        addLog("Running detection models...");
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        // Determine Endpoint & Data
+        const mode = analysisMode.value;
+        let endpoint = "/detect";
+
+        if (mode === "pro") {
+          endpoint = "/detect_pro";
+          const cId = candidateId.value.trim();
+          const cName = candidateName.value.trim();
+
+          if (!cId || !cName) {
+            addLog("Error: Missing candidate info for Pro mode", "error");
+            alert("Vui lòng nhập Mã thí sinh và Tên thí sinh!");
+
+            submitBtn.innerHTML =
+              '<i class="fa-solid fa-magnifying-glass"></i> Phân Tích Ngay';
+            submitBtn.classList.remove("opacity-75");
+            submitBtn.disabled = false;
+            scanOverlay.style.display = "none";
+            return;
+          }
+          formData.append("candidate_id", cId);
+          formData.append("candidate_name", cName);
+          addLog(`Mode: Pro | Candidate: ${cName} (${cId})`);
+        } else {
+          addLog("Mode: Standard");
+        }
+
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          addLog("Analysis complete.", "success");
+          displayResults(data);
+        } catch (error) {
+          console.error("Error:", error);
+          addLog(`Error: ${error.message}`, "error");
+          submitBtn.innerHTML =
+            '<i class="fa-solid fa-triangle-exclamation"></i> Lỗi';
+          setTimeout(() => {
+            submitBtn.innerHTML =
+              '<i class="fa-solid fa-magnifying-glass"></i> Phân Tích Ngay';
+            submitBtn.classList.remove("opacity-75");
+            submitBtn.disabled = false;
+            scanOverlay.style.display = "none";
+          }, 2000);
+        }
+      });
+
+      function displayResults(data) {
+        // Hide upload, show results
+        uploadContainer.classList.add("hidden");
+        resultsContainer.classList.remove("hidden");
+
+        // Parse Data
+        const isCheating = data.cheating;
+        const faces = data.person || 0;
+        const gaze = data.gaze || "Unknown";
+        const time = data.execution_time || "0s";
+
+        // Devices
+        let devices = [];
+        if (data.cheat_mobilephone && data.cheat_mobilephone.length > 0)
+          devices.push("Điện thoại");
+        if (data.cheat_headphone && data.cheat_headphone.length > 0)
+          devices.push("Tai nghe");
+        const deviceText = devices.length > 0 ? devices.join(", ") : "Không có";
+
+        // Update Status Banner
+        if (isCheating) {
+          resultStatus.className =
+            "p-4 rounded-xl text-center font-bold text-lg border shadow-sm bg-red-100 text-red-700 border-red-200";
+          resultStatus.innerHTML =
+            '<i class="fa-solid fa-triangle-exclamation"></i> PHÁT HIỆN GIAN LẬN';
+          addLog("ALERT: Cheating behavior detected!", "error");
+        } else {
+          resultStatus.className =
+            "p-4 rounded-xl text-center font-bold text-lg border shadow-sm bg-green-100 text-green-700 border-green-200";
+          resultStatus.innerHTML =
+            '<i class="fa-solid fa-check-circle"></i> KHÔNG GIAN LẬN';
+          addLog("Result: Clean.", "success");
+        }
+
+        // Update Metrics
+        resFaces.textContent = faces;
+        resGaze.textContent = gaze;
+        resDevices.textContent = deviceText;
+        resTime.textContent = time;
+
+        // Log details
+        if (faces > 1) addLog(`Warning: ${faces} faces detected.`, "warning");
+        if (devices.length > 0)
+          addLog(`Warning: Devices detected: ${deviceText}`, "warning");
+        if (gaze !== "center" && gaze !== "Unknown")
+          addLog(`Warning: Gaze direction: ${gaze}`, "warning");
+      }
+    </script>
+  </body>
+</html>

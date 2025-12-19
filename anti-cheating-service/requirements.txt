@@ -1,0 +1,14 @@
+numpy
+opencv-python
+insightface
+onnxruntime
+pandas
+mediapipe
+torch
+ultralytics
+aiofiles
+fastapi
+uvicorn
+python-multipart
+git+https://github.com/edavalosanaya/L2CS-Net.git@main
+# L2CS: Library để ước tính hướng nhìn (gaze estimation)

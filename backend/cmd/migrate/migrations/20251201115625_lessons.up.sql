@@ -1,9 +1,0 @@
-CREATE TABLE lessons (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    course_id BIGINT NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_lessons_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-);

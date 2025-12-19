@@ -37,27 +37,72 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error
 		return nil, err
 	}
 
+	// Begin transaction
+	tx, err := s.userRepo.BeginTx()
+	if err != nil {
+		return nil, err
+	}
+
+	// đảm bảo rollback nếu có panic / error
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		}
+	}()
+
 	// Create user
 	user := &models.User{
 		Name:     req.Name,
 		Email:    req.Email,
 		Password: hashedPassword,
-		Status:   1, // Active
 	}
 
-	if err := s.userRepo.Create(user); err != nil {
+	// 1️⃣ Create user
+	if err = s.userRepo.Create(tx, user); err != nil {
 		return nil, err
 	}
 
-	// Assign default "student" role
-	studentRole, err := s.userRepo.GetRoleByName("student")
+	// 2️⃣ Assign role
+	role, err := s.userRepo.GetRoleByName("student")
 	if err != nil {
 		return nil, err
 	}
-	if studentRole != nil {
-		if err := s.userRepo.AssignRole(user.ID, studentRole.ID); err != nil {
-			return nil, err
-		}
+	if role == nil {
+		return nil, errors.New("default role not found")
+	}
+
+	if err = s.userRepo.AssignRole(tx, user.ID, role.ID); err != nil {
+		return nil, err
+	}
+
+	// 3️⃣ Create profile
+	profile := &models.Profile{
+		UserID:   user.ID,
+		Bio:      req.Bio,
+		Avatar:   "",
+		Phone:    req.Phone,
+		BirthDay: time.Time{},
+	}
+	if req.BirthDay != nil {
+		profile.BirthDay = *req.BirthDay
+	}
+	// if req.Avatar != nil {
+	// 	avatarURL, err := s.fileService.SaveAvatar(req.Avatar, user.ID)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	profile.Avatar = avatarURL
+	// }
+	if err = s.userRepo.CreateProfile(tx, profile); err != nil {
+		return nil, err
+	}
+
+	user.Profile = profile
+
+	// 4️⃣ Commit
+	if err = tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	return user, nil
@@ -85,13 +130,20 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.LoginResponse, er
 		return nil, err
 	}
 
+	// 👇 LOAD PROFILE
+	profile, err := s.userRepo.GetProfileByUserID(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	user.Profile = profile
+
 	// Generate JWT token
 	token, err := utils.GenerateToken(user.ID, user.Email, roles, s.jwtExpiration)
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.LoginResponse{
+	resp := &models.LoginResponse{
 		Token: token,
 		User: models.UserInfo{
 			ID:    user.ID,
@@ -99,7 +151,19 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.LoginResponse, er
 			Email: user.Email,
 			Roles: roles,
 		},
-	}, nil
+	}
+
+	// 👇 gán profile nếu có
+	if user.Profile != nil {
+		resp.User.Profile = &models.Profile{
+			Bio:      user.Profile.Bio,
+			Phone:    user.Profile.Phone,
+			BirthDay: user.Profile.BirthDay,
+			Avatar:   user.Profile.Avatar,
+		}
+	}
+
+	return resp, nil
 }
 
 // GetUserByID retrieves user information by ID
@@ -112,17 +176,37 @@ func (s *AuthService) GetUserByID(userID int64) (*models.UserInfo, error) {
 		return nil, errors.New("user not found")
 	}
 
+	// Get user roles
 	roles, err := s.userRepo.GetUserRoles(user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.UserInfo{
+	// 👇 LOAD PROFILE
+	profile, err := s.userRepo.GetProfileByUserID(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	user.Profile = profile
+
+	resp := &models.UserInfo{
 		ID:    user.ID,
 		Name:  user.Name,
 		Email: user.Email,
 		Roles: roles,
-	}, nil
+	}
+	
+	if user.Profile != nil {
+		resp.Profile = &models.Profile{
+			Bio:      user.Profile.Bio,
+			Phone:    user.Profile.Phone,
+			BirthDay: user.Profile.BirthDay,
+			Avatar:   user.Profile.Avatar,
+		}
+	}
+
+	return resp, nil
+
 }
 
 // ChangePassword changes user password

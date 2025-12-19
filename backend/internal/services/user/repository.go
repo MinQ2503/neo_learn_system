@@ -32,10 +32,10 @@ func (r *UserRepository) Create(tx *sql.Tx, user *models.User) error {
 		db = tx
 	}
 	query := `
-		INSERT INTO users (name, email, password, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, NOW(), NOW())
+		INSERT INTO users (name, email, password, created_at, updated_at)
+		VALUES (?, ?, ?, NOW(), NOW())
 	`
-	result, err := db.Exec(query, user.Name, user.Email, user.Password, user.Status)
+	result, err := db.Exec(query, user.Name, user.Email, user.Password)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (r *UserRepository) CreateProfile(tx *sql.Tx, profile *models.Profile) erro
 		db = tx
 	}
 	query := `
-		INSERT INTO profiles (user_id, bio, avatar, phone, birth_day, created_at, updated_at)
+		INSERT INTO profiles (user_id, bio, avatar, phone, birthDay, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, NOW(), NOW())
 	`
 	result, err := db.Exec(query, profile.UserID, profile.Bio, profile.Avatar, profile.Phone, profile.BirthDay)
@@ -89,10 +89,12 @@ func (r *UserRepository) AssignRole(tx *sql.Tx, userID int64, roleName string) e
 
 func (r *UserRepository) GetUsersByRole(roleName string) ([]models.User, error) {
 	query := `
-		SELECT u.id, u.name, u.email, u.status, u.created_at, u.updated_at
+		SELECT u.id, u.name, u.email, u.status, u.created_at, u.updated_at,
+		       p.id, p.bio, p.avatar, p.phone, p.birthday, p.created_at, p.updated_at
 		FROM users u
 		JOIN user_roles ur ON u.id = ur.user_id
 		JOIN roles r ON ur.role_id = r.id
+		LEFT JOIN profiles p ON u.id = p.user_id
 		WHERE r.name = ?
 	`
 	rows, err := r.db.Query(query, roleName)
@@ -104,8 +106,29 @@ func (r *UserRepository) GetUsersByRole(roleName string) ([]models.User, error) 
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		var p models.Profile
+		var pID sql.NullInt64
+		var pBio, pAvatar, pPhone sql.NullString
+		var pBirthDay sql.NullTime
+		var pCreatedAt, pUpdatedAt sql.NullTime
+
+		if err := rows.Scan(
+			&u.ID, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt,
+			&pID, &pBio, &pAvatar, &pPhone, &pBirthDay, &pCreatedAt, &pUpdatedAt,
+		); err != nil {
 			return nil, err
+		}
+
+		if pID.Valid {
+			p.ID = pID.Int64
+			p.UserID = u.ID
+			p.Bio = pBio.String
+			p.Avatar = pAvatar.String
+			p.Phone = pPhone.String
+			p.BirthDay = pBirthDay.Time
+			p.CreatedAt = pCreatedAt.Time
+			p.UpdatedAt = pUpdatedAt.Time
+			u.Profile = &p
 		}
 		users = append(users, u)
 	}
@@ -113,21 +136,76 @@ func (r *UserRepository) GetUsersByRole(roleName string) ([]models.User, error) 
 }
 
 func (r *UserRepository) GetByID(id int64) (*models.User, error) {
-	query := `SELECT id, name, email, status, created_at, updated_at FROM users WHERE id = ?`
+	query := `
+		SELECT u.id, u.name, u.email, u.status, u.created_at, u.updated_at,
+		       p.id, p.bio, p.avatar, p.phone, p.birthday, p.created_at, p.updated_at
+		FROM users u
+		LEFT JOIN profiles p ON u.id = p.user_id
+		WHERE u.id = ?
+	`
 	var u models.User
-	err := r.db.QueryRow(query, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	var p models.Profile
+	var pID sql.NullInt64
+	var pBio, pAvatar, pPhone sql.NullString
+	var pBirthDay sql.NullTime
+	var pCreatedAt, pUpdatedAt sql.NullTime
+
+	err := r.db.QueryRow(query, id).Scan(
+		&u.ID, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt,
+		&pID, &pBio, &pAvatar, &pPhone, &pBirthDay, &pCreatedAt, &pUpdatedAt,
+	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+
+	if pID.Valid {
+		p.ID = pID.Int64
+		p.UserID = u.ID
+		p.Bio = pBio.String
+		p.Avatar = pAvatar.String
+		p.Phone = pPhone.String
+		p.BirthDay = pBirthDay.Time
+		p.CreatedAt = pCreatedAt.Time
+		p.UpdatedAt = pUpdatedAt.Time
+		u.Profile = &p
+	}
+
 	return &u, nil
 }
 
 func (r *UserRepository) Update(user *models.User) error {
-	query := `UPDATE users SET name = ?, email = ?, status = ?, updated_at = NOW() WHERE id = ?`
-	_, err := r.db.Exec(query, user.Name, user.Email, user.Status, user.ID)
+	query := `UPDATE users SET name = ?, email = ?, updated_at = NOW() WHERE id = ?`
+	_, err := r.db.Exec(query, user.Name, user.Email, user.ID)
+	return err
+}
+
+func (r *UserRepository) UpdateProfile(profile *models.Profile) error {
+	// Check if profile exists
+	var count int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM profiles WHERE user_id = ?", profile.UserID).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Create if not exists
+		query := `
+			INSERT INTO profiles (user_id, bio, avatar, phone, birthday, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+		`
+		_, err := r.db.Exec(query, profile.UserID, profile.Bio, profile.Avatar, profile.Phone, profile.BirthDay)
+		return err
+	}
+
+	query := `
+		UPDATE profiles 
+		SET bio = ?, avatar = ?, phone = ?, birthday = ?, updated_at = NOW() 
+		WHERE user_id = ?
+	`
+	_, err = r.db.Exec(query, profile.Bio, profile.Avatar, profile.Phone, profile.BirthDay, profile.UserID)
 	return err
 }
 

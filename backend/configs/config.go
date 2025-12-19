@@ -54,7 +54,7 @@ func initConfig() *Config {
 			Port:      getEnv("DB_PORT", "3306"),
 			User:      getEnv("DB_USER", "neo_user"),
 			Password:  getEnv("DB_PASSWORD", "NeoLearn@123"),
-			DBName:    getEnv("DB_NAME", "neo_learn_system_db"),
+			DBName:    getEnv("DB_NAME", "neo_learn_system_db_main"),
 			DBAddress: getEnv("DB_HOST", "localhost") + ":" + getEnv("DB_PORT", "3306"),
 			SSLMode:   getEnv("DB_SSLMODE", "disable"),
 		},
