@@ -10,5 +10,6 @@ aiofiles
 fastapi
 uvicorn
 python-multipart
+httpx
 git+https://github.com/edavalosanaya/L2CS-Net.git@main
 # L2CS: Library để ước tính hướng nhìn (gaze estimation)
