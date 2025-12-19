@@ -89,33 +89,15 @@ facedetector = CheatingDetector(
         )
 
 # Middleware CORS - Fixed strict-origin-when-cross-origin error
+# Option 1: Dùng regex để cho phép mọi localhost port (development)
+# Option 2: Nếu vẫn lỗi, thử bỏ allow_credentials hoặc dùng allow_origins=["*"] với allow_credentials=False
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://localhost:8080",  # Go backend
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-    allow_headers=[
-        "Origin",
-        "Content-Type",
-        "Accept",
-        "Authorization",
-        "X-Requested-With",
-        "Access-Control-Request-Method",
-        "Access-Control-Request-Headers",
-    ],
-    expose_headers=[
-        "Content-Length",
-        "Content-Type",
-        "Authorization",
-    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=False,  # Đổi thành False nếu không cần cookies/auth
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
     max_age=3600,
 )
 
