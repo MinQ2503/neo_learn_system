@@ -7,6 +7,7 @@ import (
 
 	config "github.com/MinQ2503/neo_learn_system/backend/configs"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/auth"
+	"github.com/MinQ2503/neo_learn_system/backend/internal/services/question_bank"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/user"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/utils"
 	"github.com/gin-contrib/cors"
@@ -54,6 +55,11 @@ func (s *APIServer) Run() error {
 	userRepoV2 := user.NewUserRepository(s.db)
 	userService := user.NewUserService(userRepoV2)
 	userHandler := user.NewUserHandler(userService)
+
+	// Initialize question bank service
+	questionRepo := question_bank.NewQuestionRepository(s.db)
+	questionService := question_bank.NewQuestionService(questionRepo)
+	questionHandler := question_bank.NewQuestionHandler(questionService)
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -137,6 +143,19 @@ func (s *APIServer) Run() error {
 			adminRoutes.GET("/:id", userHandler.GetAdmin)
 			adminRoutes.PUT("/:id", userHandler.UpdateAdmin)
 			adminRoutes.DELETE("/:id", userHandler.DeleteAdmin)
+		}
+
+		// Question Bank routes
+		questionRoutes := v1.Group("/questions")
+		questionRoutes.Use(auth.AuthMiddleware())
+		questionRoutes.Use(auth.RoleMiddleware("admin", "teacher"))
+		{
+			questionRoutes.POST("", questionHandler.CreateQuestion)
+			questionRoutes.GET("", questionHandler.GetAllQuestions)
+			questionRoutes.DELETE("", questionHandler.DeleteQuestions)
+			questionRoutes.GET("/:id", questionHandler.GetQuestion)
+			questionRoutes.PUT("/:id", questionHandler.UpdateQuestion)
+			questionRoutes.DELETE("/:id", questionHandler.DeleteQuestion)
 		}
 	}
 
