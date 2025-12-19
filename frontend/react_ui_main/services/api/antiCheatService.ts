@@ -8,9 +8,8 @@ export const ANTI_CHEAT_BASE_URL = import.meta.env.VITE_ANTI_CHEAT_URL || 'http:
 export const antiCheatClient: AxiosInstance = axios.create({
   baseURL: ANTI_CHEAT_BASE_URL,
   timeout: 30000, // 30 seconds timeout for image processing
-  headers: {
-    'Content-Type': 'multipart/form-data',
-  },
+  // Không set Content-Type ở đây, để axios tự động set khi dùng FormData
+  withCredentials: false, // Phải false khi server dùng allow_origins=["*"]
 });
 
 // Detect cheating from image
@@ -63,11 +62,8 @@ export const antiCheatService = {
     formData.append('candidate_name', candidate_name);
     formData.append('file', file);
 
-    const response = await antiCheatClient.post<DetectProResponse>('/detect_pro', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Không set Content-Type header, để axios tự động set boundary cho multipart/form-data
+    const response = await antiCheatClient.post<DetectProResponse>('/detect_pro', formData);
 
     return response.data;
   },

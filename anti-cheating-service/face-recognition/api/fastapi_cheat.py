@@ -89,12 +89,11 @@ facedetector = CheatingDetector(
         )
 
 # Middleware CORS - Fixed strict-origin-when-cross-origin error
-# Option 1: Dùng regex để cho phép mọi localhost port (development)
-# Option 2: Nếu vẫn lỗi, thử bỏ allow_credentials hoặc dùng allow_origins=["*"] với allow_credentials=False
+# Cho phép tất cả origins trong development (không dùng credentials)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_credentials=False,  # Đổi thành False nếu không cần cookies/auth
+    allow_origins=["*"],  # Cho phép tất cả origins
+    allow_credentials=False,  # Phải False khi dùng allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
