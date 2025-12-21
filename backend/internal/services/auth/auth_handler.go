@@ -6,17 +6,20 @@ import (
 	"strconv"
 
 	"github.com/MinQ2503/neo_learn_system/backend/internal/models"
+	"github.com/MinQ2503/neo_learn_system/backend/internal/services/anti_cheating"
 
 	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
-	authService *AuthService
+	authService        *AuthService
+	antiCheatingClient anti_cheating.AntiCheatingService
 }
 
-func NewAuthHandler(authService *AuthService) *AuthHandler {
+func NewAuthHandler(authService *AuthService, antiCheatingClient anti_cheating.AntiCheatingService) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
+		authService:        authService,
+		antiCheatingClient: antiCheatingClient,
 	}
 }
 
@@ -261,7 +264,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 }
 
 func (h *AuthHandler) UploadAvatar(c *gin.Context) {
-	// 1️⃣ Lấy user_id từ form-data
+	// 1️⃣ Lấy user_id từ param
 	userIDParam := c.Param("user_id")
 	userID, err := strconv.ParseInt(userIDParam, 10, 64)
 	if err != nil {
@@ -282,7 +285,17 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	// 3️⃣ Cập nhật avatar thông qua service
+	// 3️⃣ Lấy thông tin user để có tên
+	userInfo, err := h.authService.GetUserByID(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "user not found",
+		})
+		return
+	}
+
+	// 4️⃣ Cập nhật avatar thông qua service (lưu file vào profile_image_users)
 	avatarURL, err := h.authService.UpdateAvatar(nil, userID, avatarFile)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -292,7 +305,35 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	// 4️⃣ Trả về kết quả
+	// 5️⃣ Gọi API anti-cheating để thêm vào face database
+	if h.antiCheatingClient != nil {
+		addPersonResp, err := h.antiCheatingClient.AddPersonToDatabase(userID, userInfo.Name, avatarFile)
+		if err != nil {
+			// Log error nhưng vẫn trả về success vì avatar đã được lưu
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": "Avatar uploaded successfully but failed to add to face database",
+				"data": gin.H{
+					"avatar":        avatarURL,
+					"face_db_error": err.Error(),
+				},
+			})
+			return
+		}
+
+		// Trả về kết quả đầy đủ
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Avatar uploaded and added to face database successfully",
+			"data": gin.H{
+				"avatar":           avatarURL,
+				"face_db_response": addPersonResp,
+			},
+		})
+		return
+	}
+
+	// 6️⃣ Trả về kết quả nếu không có anti-cheating client
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Avatar uploaded successfully",

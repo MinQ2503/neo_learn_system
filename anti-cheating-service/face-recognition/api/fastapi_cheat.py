@@ -27,6 +27,7 @@ import asyncio
 from insight_face import *
 
 from datetime import datetime, timezone, timedelta
+import unicodedata
 
 # from image_cheat_detection import FaceDetectors  # Model phát hiện gian lận bằng khuôn mặt
 from image_facecheat import *
@@ -37,6 +38,9 @@ PARENT_DIR = os.path.dirname(CURRENT_DIR) # face-recognition
 
 # Thư mục chứa ảnh database của ảnh
 BASE_DIR_DATA_IMAGE = os.path.join(CURRENT_DIR, "database", "train")
+
+# Thư mục chứa ảnh từ backend (profile_image_users)
+BACKEND_UPLOAD_DIR = os.path.join(PARENT_DIR, "..", "..", "backend", "cmd", "uploads", "profile_image_users")
 
 # Thư mục chứa ảnh cheating
 CHEATING_IMAGE_DIR = os.path.join(PARENT_DIR, "logs", "cheating_images")
@@ -104,6 +108,23 @@ def get_current_vietnam_time_log_format():
     now_vietnam = datetime.now(tz_vietnam)
     timestamp = now_vietnam.strftime("%Y-%m-%d %H:%M:%S")
     return timestamp
+
+
+def normalize_vietnamese_name(name: str) -> str:
+    """
+    Chuẩn hóa tên tiếng Việt: loại bỏ dấu, chuyển thành chữ thường, thay khoảng trắng bằng underscore.
+    Ví dụ: "Nguyễn Minh Quang" -> "nguyen_minh_quang"
+    """
+    # Loại bỏ dấu tiếng Việt
+    name = unicodedata.normalize('NFD', name)
+    name = ''.join(char for char in name if unicodedata.category(char) != 'Mn')
+    # Chuyển thành chữ thường
+    name = name.lower()
+    # Thay khoảng trắng bằng underscore và loại bỏ ký tự đặc biệt
+    name = re.sub(r'[^a-z0-9_]+', '_', name)
+    # Loại bỏ underscore thừa ở đầu/cuối
+    name = name.strip('_')
+    return name
 
 
 def save_cheating_logs(
@@ -1741,14 +1762,16 @@ async def detect_and_log_txt_cathi_lop_point(
 @app.post("/add_new_person")
 async def add_candidate_image(
     candidate_id: int = Form(...),
-    # candidate_name: str = Form(...),
+    candidate_name: str = Form(...),
     file: UploadFile = File(...),
 ):
-    # (phần kiểm tra rỗng và định dạng file giữ nguyên)
-
-    folder_name = f"{candidate_id}"
-    folder_path = os.path.join(BASE_DIR_DATA_IMAGE, folder_name)
-    os.makedirs(folder_path, exist_ok=True)
+    # Chuẩn hóa tên user
+    normalized_name = normalize_vietnamese_name(candidate_name)
+    
+    # Lưu ảnh vào thư mục profile_image_users của backend
+    folder_name = f"{candidate_id}_{normalized_name}"
+    backend_folder_path = os.path.join(BACKEND_UPLOAD_DIR, folder_name)
+    os.makedirs(backend_folder_path, exist_ok=True)
 
     tz_vietnam = timezone(timedelta(hours=7))
     now_vietnam = datetime.now(tz_vietnam)
@@ -1757,55 +1780,153 @@ async def add_candidate_image(
     file_ext = file_ext.lower()
     if file_ext not in [".png", ".jpg", ".jpeg"]:
         file_ext = ".jpg"
-    file_name = f"{candidate_id}_{timestamp}{file_ext}"
-    image_path = os.path.join(folder_path, file_name)
+    file_name = f"{candidate_id}_{normalized_name}_{timestamp}{file_ext}"
+    image_path = os.path.join(backend_folder_path, file_name)
 
+    # Lưu file vào thư mục backend
     file.file.seek(0)
     with open(image_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Thêm vào face database
     database = FACE_DATABASE_PATH
     file_name_database = f"{candidate_id}"
 
     try:
-        success, error_images = add_person_to_database_test(database, file_name_database, folder_path)
+        success, error_images = add_person_to_database_test(database, file_name_database, backend_folder_path)
 
-        if success and not error_images:  # Chỉ thành công nếu không có lỗi
-            log_to_file(LOG_NEWPERSON, f"[{get_current_vietnam_time_log_format()}] ADD NEW PERSON: {file_name_database}")
+        if success:
+            log_to_file(LOG_NEWPERSON, f"[{get_current_vietnam_time_log_format()}] ADD NEW PERSON: {file_name_database} - Success with {len(error_images)} errors")
             return JSONResponse(
                 status_code=200,
                 content={
                     "message": "Tải ảnh và thêm vào database thành công.",
                     "image_path": image_path,
                     "database_username": file_name_database,
-                    # "errors": []  # Không có lỗi
+                    "total_images": len(os.listdir(backend_folder_path)),
+                    "error_images": error_images if error_images else []
                 }
             )
         else:
-            error_msg = "Có lỗi xảy ra khi thêm ảnh vào database."
+            error_msg = "Không thể thêm ảnh vào database - tất cả ảnh đều bị lỗi."
             log_to_file(LOG_ERROR, f"[{get_current_vietnam_time_log_format()}] ADD_FAIL: {file_name_database} - {error_msg} - Errors: {error_images}")
-            # Delete the folder and its contents
-            shutil.rmtree(folder_path, ignore_errors=True)
+            # Xóa thư mục nếu thất bại hoàn toàn
+            shutil.rmtree(backend_folder_path, ignore_errors=True)
             return JSONResponse(
                 status_code=400,
                 content={
                     "message": error_msg,
-                    "errors": error_images  # Trả về danh sách lỗi
+                    "errors": error_images
                 }
             )
     except Exception as e:
         log_to_file(LOG_ERROR, f"[{get_current_vietnam_time_log_format()}] ADD_ERROR: {file_name_database} - {str(e)}")
-        # Delete the folder and its contents
-        shutil.rmtree(folder_path, ignore_errors=True)
+        # Xóa thư mục nếu có lỗi
+        shutil.rmtree(backend_folder_path, ignore_errors=True)
         return JSONResponse(
             status_code=500,
             content={
-                "message": "❌ Ảnh được tải lên nhưng không thể thêm vào database.",
+                "message": "Ảnh được tải lên nhưng không thể thêm vào database.",
                 "error": str(e)
             }
         )
 
 
+##################################################################################
+
+# Endpoint để đồng bộ tất cả ảnh từ profile_image_users vào face database
+@app.post("/sync_all_users_from_backend", summary="Đồng bộ tất cả người dùng từ backend vào face database")
+async def sync_all_users_from_backend():
+    """
+    Đồng bộ tất cả ảnh từ thư mục profile_image_users của backend vào face database.
+    Duyệt qua từng thư mục con (mỗi thư mục = 1 user với ID là tên thư mục)
+    """
+    try:
+        if not os.path.exists(BACKEND_UPLOAD_DIR):
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "message": f"Không tìm thấy thư mục backend: {BACKEND_UPLOAD_DIR}",
+                    "success": False
+                }
+            )
+        
+        results = []
+        total_success = 0
+        total_failed = 0
+        
+        # Duyệt qua từng thư mục con (mỗi thư mục = 1 user)
+        for user_folder in os.listdir(BACKEND_UPLOAD_DIR):
+            user_folder_path = os.path.join(BACKEND_UPLOAD_DIR, user_folder)
+            
+            # Bỏ qua nếu không phải thư mục
+            if not os.path.isdir(user_folder_path):
+                continue
+            
+            # Lấy candidate_id từ tên thư mục (format: id_name hoặc chỉ id)
+            candidate_id = user_folder.split('_')[0] if '_' in user_folder else user_folder
+            
+            try:
+                # Thêm vào database
+                success, error_images = add_person_to_database_test(
+                    FACE_DATABASE_PATH, 
+                    candidate_id, 
+                    user_folder_path
+                )
+                
+                if success:
+                    total_success += 1
+                    log_to_file(
+                        LOG_NEWPERSON, 
+                        f"[{get_current_vietnam_time_log_format()}] SYNC SUCCESS: {candidate_id} - {len(error_images)} errors"
+                    )
+                    results.append({
+                        "candidate_id": candidate_id,
+                        "status": "success",
+                        "error_images": error_images
+                    })
+                else:
+                    total_failed += 1
+                    log_to_file(
+                        LOG_ERROR, 
+                        f"[{get_current_vietnam_time_log_format()}] SYNC FAILED: {candidate_id} - All images failed"
+                    )
+                    results.append({
+                        "candidate_id": candidate_id,
+                        "status": "failed",
+                        "error_images": error_images
+                    })
+            except Exception as e:
+                total_failed += 1
+                log_to_file(
+                    LOG_ERROR, 
+                    f"[{get_current_vietnam_time_log_format()}] SYNC ERROR: {candidate_id} - {str(e)}"
+                )
+                results.append({
+                    "candidate_id": candidate_id,
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"Đồng bộ hoàn tất: {total_success} thành công, {total_failed} thất bại",
+                "total_success": total_success,
+                "total_failed": total_failed,
+                "results": results
+            }
+        )
+    
+    except Exception as e:
+        log_to_file(LOG_ERROR, f"[{get_current_vietnam_time_log_format()}] SYNC_ALL_ERROR: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "message": "Lỗi khi đồng bộ người dùng",
+                "error": str(e)
+            }
+        )
 
 ##################################################################################
 
@@ -1814,34 +1935,40 @@ async def add_candidate_image(
 ##################################################################################
 @app.post("/delete_person")
 async def delete_person(
-    # candidate_name: str = Form(...),
     candidate_id: int = Form(...)
 ):
-    # folder_name = f"{candidate_name}_{candidate_id}"
-    folder_name = f"{candidate_id}"
-
-    folder_path = os.path.join(BASE_DIR_DATA_IMAGE, folder_name)
+    # Tìm thư mục có prefix là candidate_id trong BACKEND_UPLOAD_DIR
+    folder_path = None
+    folder_name = None
+    
+    if os.path.exists(BACKEND_UPLOAD_DIR):
+        for folder in os.listdir(BACKEND_UPLOAD_DIR):
+            if folder.startswith(f"{candidate_id}_"):
+                folder_name = folder
+                folder_path = os.path.join(BACKEND_UPLOAD_DIR, folder)
+                break
+    
+    if not folder_path:
+        log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_FOLDER_NOT_FOUND: Không tìm thấy thư mục cho candidate_id {candidate_id}")
+        return JSONResponse(status_code=404, content={"message": f"Không tìm thấy thư mục cho candidate_id {candidate_id}"})
 
     log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_PERSON_REQUEST: Yêu cầu xóa người {folder_name}")
 
     # Xóa thư mục ảnh
-    if os.path.exists(folder_path):
-        try:
-            shutil.rmtree(folder_path)
-            log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_FOLDER_SUCCESS: Đã xóa thư mục ảnh {folder_path}")
-        except Exception as e:
-            log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_FOLDER_ERROR: Lỗi khi xóa thư mục {folder_path} - {str(e)}")
-            return JSONResponse(status_code=500, content={"message": f"Lỗi khi xóa thư mục ảnh: {str(e)}"})
-    else:
-        log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_FOLDER_NOT_FOUND: Thư mục ảnh không tồn tại {folder_path}")
-        return JSONResponse(status_code=404, content={"message": "Thư mục ảnh không tồn tại"})
+    try:
+        shutil.rmtree(folder_path)
+        log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_FOLDER_SUCCESS: Đã xóa thư mục ảnh {folder_path}")
+    except Exception as e:
+        log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_FOLDER_ERROR: Lỗi khi xóa thư mục {folder_path} - {str(e)}")
+        return JSONResponse(status_code=500, content={"message": f"Lỗi khi xóa thư mục ảnh: {str(e)}"})
 
     # Xóa key trong database pickle
     try:
         with open(FACE_DATABASE_PATH, "rb") as f:
             face_database = pickle.load(f)
 
-        key_to_delete = folder_name
+        # Key trong database là candidate_id (dạng string)
+        key_to_delete = str(candidate_id)
         if key_to_delete in face_database:
             del face_database[key_to_delete]
             with open(FACE_DATABASE_PATH, "wb") as f:
@@ -1854,7 +1981,7 @@ async def delete_person(
         log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_DB_ERROR: Lỗi khi xử lý database - {str(e)}")
         return JSONResponse(status_code=500, content={"message": f"Lỗi khi xử lý database: {str(e)}"})
 
-    log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_PERSON_SUCCESS: Xóa thành công người {folder_name} khỏi thư mục và database.")
+    log_to_file(LOG_DELETEPERSON, f"[{get_current_vietnam_time_log_format()}] DELETE_PERSON_SUCCESS: Xóa thành công người {folder_name} (ID: {candidate_id}) khỏi thư mục và database.")
     return JSONResponse(status_code=200, content={"message": f"Xóa thành công người {folder_name} khỏi thư mục và database."})
 
 

@@ -10,9 +10,10 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
+	Server       ServerConfig
+	Database     DatabaseConfig
+	JWT          JWTConfig
+	AntiCheating AntiCheatingConfig
 }
 
 type ServerConfig struct {
@@ -34,6 +35,10 @@ type JWTConfig struct {
 	Secret string
 	// Expiration time.Duration
 	ExpirationInSeconds time.Duration
+}
+
+type AntiCheatingConfig struct {
+	ServiceURL string
 }
 
 var Envs = initConfig()
@@ -62,6 +67,9 @@ func initConfig() *Config {
 			Secret: getEnv("JWT_SECRET", "your_super_secret_key_change_this_in_production"),
 			// Expiration: 24 * time.Hour, // 24 hours
 			ExpirationInSeconds: time.Duration(getEnvAsInt("JWT_EXPIRATION_SECONDS", 3600*24*7)), // 24 hours
+		},
+		AntiCheating: AntiCheatingConfig{
+			ServiceURL: getEnv("ANTI_CHEATING_SERVICE_URL", "http://localhost:8001"),
 		},
 	}
 }

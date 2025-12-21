@@ -17,6 +17,9 @@ Remove-Item -Recurse -Force .venv
 - Kiểm tra python version trong .venv
 Get-Command python
 
+- Chạy service 
+uvicorn fastapi_cheat:app --host 127.0.0.1 --port 8001 --reload
+
 ## Project
 - Tải các thư viện cần thiết
 pip install -r requirements.txt

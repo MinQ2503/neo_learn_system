@@ -6,6 +6,7 @@ import (
 	"time"
 
 	config "github.com/MinQ2503/neo_learn_system/backend/configs"
+	"github.com/MinQ2503/neo_learn_system/backend/internal/services/anti_cheating"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/auth"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/question_bank"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/user"
@@ -46,10 +47,13 @@ func (s *APIServer) Run() error {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Initialize anti-cheating service client
+	antiCheatingClient := anti_cheating.NewAntiCheatingClient(config.Envs.AntiCheating.ServiceURL)
+
 	// Initialize auth service
 	userRepo := auth.NewUserRepository(s.db)
 	authService := auth.NewAuthService(userRepo, time.Second*config.Envs.JWT.ExpirationInSeconds)
-	authHandler := auth.NewAuthHandler(authService)
+	authHandler := auth.NewAuthHandler(authService, antiCheatingClient)
 
 	// Initialize user service (for user management)
 	userRepoV2 := user.NewUserRepository(s.db)

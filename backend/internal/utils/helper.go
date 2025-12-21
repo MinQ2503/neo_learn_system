@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 func SaveUserAvatar(userID int64, userName string, file *multipart.FileHeader) (string, error) {
@@ -29,9 +28,20 @@ func SaveUserAvatar(userID int64, userName string, file *multipart.FileHeader) (
 	uploadDir := filepath.Join(baseDir, userFolder)
 	_ = os.MkdirAll(uploadDir, os.ModePerm)
 
+	// Xóa tất cả ảnh cũ trong thư mục (ghi đè)
+	files, err := os.ReadDir(uploadDir)
+	if err == nil {
+		for _, f := range files {
+			if !f.IsDir() {
+				oldFilePath := filepath.Join(uploadDir, f.Name())
+				_ = os.Remove(oldFilePath)
+			}
+		}
+	}
+
 	// File name
 	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("avatar_%d%s", time.Now().Unix(), ext)
+	filename := fmt.Sprintf("%d_%s%s", userID, slugName, ext)
 	filePath := filepath.Join(uploadDir, filename)
 
 	// Save file bằng io.Copy
