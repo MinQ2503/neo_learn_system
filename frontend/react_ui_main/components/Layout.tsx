@@ -1,6 +1,11 @@
+
 import React from 'react';
-import { clearRole } from '../services/mockService';
-import { LogOut, LayoutDashboard, ShieldCheck, PieChart, Users, BookOpen, Layers, ClipboardList, FileText, School } from 'lucide-react';
+import { clearRole, getCurrentUser } from '../services/mockService';
+import { 
+  LogOut, LayoutDashboard, ShieldCheck, PieChart, Users, 
+  BookOpen, Layers, ClipboardList, FileText, School, Key, 
+  UserCircle, GraduationCap, ClipboardCheck, Activity
+} from 'lucide-react';
 import { Role } from '../types';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -20,14 +25,21 @@ const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
     window.location.reload();
   };
 
-  const navItem = (path: string, icon: React.ReactNode, label: string) => (
-    <SidebarItem 
-      icon={icon} 
-      label={label} 
-      active={location.pathname === path || location.pathname.startsWith(path + '/')} 
-      onClick={() => navigate(path)}
-    />
-  );
+  const navItem = (path: string, icon: React.ReactNode, label: string) => {
+    const isDashboard = path === '/' + role.toLowerCase();
+    const isActive = isDashboard 
+      ? location.pathname === path 
+      : location.pathname.startsWith(path);
+
+    return (
+      <SidebarItem 
+        icon={icon} 
+        label={label} 
+        active={isActive} 
+        onClick={() => navigate(path)}
+      />
+    );
+  };
 
   return (
     <div className="min-h-screen flex bg-gray-100 font-sans text-gray-800">
@@ -40,37 +52,51 @@ const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
           <span className="text-2xl font-bold tracking-tight text-gray-800">Neo<span className="text-primary-500">Learn</span></span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto no-scrollbar pb-4">
+        <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto no-scrollbar pb-4">
           {role === Role.STUDENT && (
              <>
+               <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-2">Học tập</div>
                {navItem('/student', <LayoutDashboard size={20} />, 'Dashboard')}
-               {navItem('/student/classes', <School size={20} />, 'My Classes')}
+               {navItem('/student/courses', <BookOpen size={20} />, 'Khóa học')}
              </>
           )}
 
           {role === Role.TEACHER && (
             <>
-              <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-2">Monitoring</div>
-              {navItem('/teacher', <LayoutDashboard size={20} />, 'Live Monitor')}
-              {navItem('/teacher/proctoring', <ShieldCheck size={20} />, 'Proctoring Logs')}
+              <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-2">Giám sát</div>
+              {navItem('/teacher', <Activity size={20} />, 'Live Monitor')}
+              {navItem('/teacher/reports', <PieChart size={20} />, 'Báo cáo vi phạm')}
               
-              <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">Management</div>
-              {navItem('/teacher/exams', <FileText size={20} />, 'Exam Manager')}
-              {navItem('/teacher/students', <Users size={20} />, 'Students')}
-              {navItem('/teacher/classes', <Layers size={20} />, 'Classes')}
-              {navItem('/teacher/questions', <BookOpen size={20} />, 'Question Bank')}
-              
-              <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">Analytics</div>
-              {navItem('/teacher/reports', <ClipboardList size={20} />, 'Reports & Stats')}
+              <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">Quản lý đào tạo</div>
+              {navItem('/teacher/students', <Users size={20} />, 'Học sinh')}
+              {navItem('/teacher/courses', <School size={20} />, 'Khóa học')}
+              {navItem('/teacher/lessons', <BookOpen size={20} />, 'Bài học')}
+              {navItem('/teacher/assignments', <FileText size={20} />, 'Bài tập')}
+              {navItem('/teacher/exams', <ClipboardCheck size={20} />, 'Kỳ thi')}
+              {navItem('/teacher/questions', <BookOpen size={20} />, 'Ngân hàng câu hỏi')}
             </>
           )}
 
           {role === Role.ADMIN && (
              <>
+               <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-2">Tổng quan</div>
                {navItem('/admin', <LayoutDashboard size={20} />, 'Dashboard')}
-               {navItem('/admin/reports', <PieChart size={20} />, 'Reports')}
+               {navItem('/admin/reports', <PieChart size={20} />, 'Báo cáo')}
+               
+               <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">Quản lý Hệ thống</div>
+               {navItem('/admin/teachers', <GraduationCap size={20} />, 'Giáo viên')}
+               {navItem('/admin/students', <Users size={20} />, 'Học sinh')}
+               {navItem('/admin/courses', <School size={20} />, 'Khóa học')}
+               {navItem('/admin/lessons', <BookOpen size={20} />, 'Bài học')}
+               {navItem('/admin/assignments', <FileText size={20} />, 'Bài tập')}
+               {navItem('/admin/exams', <ClipboardCheck size={20} />, 'Kỳ thi')}
+               {navItem('/admin/questions', <BookOpen size={20} />, 'Ngân hàng câu hỏi')}
              </>
           )}
+
+          <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">Tài khoản</div>
+          {navItem('/profile-edit', <UserCircle size={20} />, 'Chỉnh sửa Profile')}
+          {navItem('/change-password', <Key size={20} />, 'Đổi mật khẩu')}
         </nav>
 
         <div className="p-4 border-t border-gray-200">
@@ -79,7 +105,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
             className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-50 transition-colors"
           >
             <LogOut size={20} />
-            <span className="font-medium">Sign Out</span>
+            <span className="font-medium">Đăng xuất</span>
           </button>
         </div>
       </aside>
@@ -89,11 +115,11 @@ const Layout: React.FC<LayoutProps> = ({ children, role, title }) => {
         <header className="flex justify-between items-center mb-8 sticky top-0 bg-gray-100/90 backdrop-blur z-10 py-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">{title}</h1>
-            <p className="text-gray-500 mt-1">Welcome back, {role.charAt(0) + role.slice(1).toLowerCase()}.</p>
+            <p className="text-gray-500 mt-1">Xin chào, {role.charAt(0) + role.slice(1).toLowerCase()}.</p>
           </div>
           <div className="flex items-center gap-4">
-             <div className="w-10 h-10 rounded-full bg-gray-200 shadow-clay overflow-hidden border-2 border-white">
-                <img src="https://picsum.photos/100/100" alt="Avatar" />
+             <div className="w-10 h-10 rounded-full bg-gray-200 shadow-clay overflow-hidden border-2 border-white cursor-pointer hover:opacity-80" onClick={() => navigate('/profile-edit')}>
+                <img src={getCurrentUser()?.avatarUrl || "https://picsum.photos/100/100"} alt="Avatar" />
              </div>
           </div>
         </header>

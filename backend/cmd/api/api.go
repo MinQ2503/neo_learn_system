@@ -9,6 +9,7 @@ import (
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/anti_cheating"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/auth"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/question_bank"
+	"github.com/MinQ2503/neo_learn_system/backend/internal/services/quiz"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/services/user"
 	"github.com/MinQ2503/neo_learn_system/backend/internal/utils"
 	"github.com/gin-contrib/cors"
@@ -64,6 +65,11 @@ func (s *APIServer) Run() error {
 	questionRepo := question_bank.NewQuestionRepository(s.db)
 	questionService := question_bank.NewQuestionService(questionRepo)
 	questionHandler := question_bank.NewQuestionHandler(questionService)
+
+	// Initialize quiz service
+	quizRepo := quiz.NewRepository(s.db)
+	quizService := quiz.NewService(quizRepo, config.Envs.AntiCheating.ServiceURL)
+	quizHandler := quiz.NewHandler(quizService)
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -160,6 +166,23 @@ func (s *APIServer) Run() error {
 			questionRoutes.GET("/:id", questionHandler.GetQuestion)
 			questionRoutes.PUT("/:id", questionHandler.UpdateQuestion)
 			questionRoutes.DELETE("/:id", questionHandler.DeleteQuestion)
+		}
+
+		// Quiz routes
+		quizRoutes := v1.Group("/quiz")
+		quizRoutes.Use(auth.AuthMiddleware())
+		{
+			// Check if user has profile image (all authenticated users)
+			quizRoutes.GET("/check-profile-image", quizHandler.CheckUserHasImage)
+
+			// Start quiz attempt (student only)
+			quizRoutes.POST("/attempts/start", quizHandler.StartQuizAttempt)
+
+			// Submit frame during quiz (student only)
+			quizRoutes.POST("/attempts/submit-frame", quizHandler.SubmitFrame)
+
+			// Get violation count
+			quizRoutes.GET("/attempts/violations", quizHandler.GetViolationCount)
 		}
 	}
 

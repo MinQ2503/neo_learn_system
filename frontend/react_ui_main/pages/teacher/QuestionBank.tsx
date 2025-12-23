@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import Layout from '../../components/Layout';
 import ClayCard from '../../components/ClayCard';
@@ -17,7 +18,7 @@ const QuestionBank: React.FC = () => {
     type: QuestionType.MULTIPLE_CHOICE,
     difficulty: 'Medium',
     options: ['', '', '', ''],
-    correctAnswer: '',
+    correctAnswer: [],
     tags: []
   });
 
@@ -31,10 +32,8 @@ const QuestionBank: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    // Basic validation
     if (!formData.text) return;
 
-    // Clean up options if not MCQ
     const payload = { ...formData };
     if (payload.type !== QuestionType.MULTIPLE_CHOICE) {
         delete payload.options;
@@ -59,12 +58,15 @@ const QuestionBank: React.FC = () => {
   const openModal = (q?: Question) => {
     if (q) {
         setEditingQ(q);
-        setFormData({ ...q });
+        setFormData({ 
+          ...q, 
+          correctAnswer: Array.isArray(q.correctAnswer) ? q.correctAnswer : (q.correctAnswer ? [q.correctAnswer] : [])
+        });
     } else {
         setEditingQ(null);
         setFormData({ 
             text: '', type: QuestionType.MULTIPLE_CHOICE, difficulty: 'Medium', 
-            options: ['', '', '', ''], correctAnswer: '', tags: [] 
+            options: ['', '', '', ''], correctAnswer: [], tags: [] 
         });
     }
     setIsModalOpen(true);
@@ -74,6 +76,22 @@ const QuestionBank: React.FC = () => {
     const newOpts = [...(formData.options || [])];
     newOpts[index] = val;
     setFormData({ ...formData, options: newOpts });
+  };
+
+  const toggleCorrectAnswer = (val: string) => {
+    if (!val) return;
+    const current = Array.isArray(formData.correctAnswer) ? formData.correctAnswer : [];
+    if (current.includes(val)) {
+        setFormData({ ...formData, correctAnswer: current.filter(a => a !== val) });
+    } else {
+        setFormData({ ...formData, correctAnswer: [...current, val] });
+    }
+  };
+
+  const isOptionCorrect = (q: Question, opt: string) => {
+    if (!q.correctAnswer) return false;
+    if (Array.isArray(q.correctAnswer)) return q.correctAnswer.includes(opt);
+    return q.correctAnswer === opt;
   };
 
   return (
@@ -99,11 +117,14 @@ const QuestionBank: React.FC = () => {
                             
                             {q.type === QuestionType.MULTIPLE_CHOICE && q.options && (
                                 <ul className="grid grid-cols-2 gap-2 mt-2">
-                                    {q.options.map((opt, idx) => (
-                                        <li key={idx} className={`text-sm p-2 rounded-lg border ${opt === q.correctAnswer ? 'bg-green-50 border-green-200 text-green-700 font-medium' : 'bg-gray-50 border-gray-100 text-gray-600'}`}>
-                                            {String.fromCharCode(65 + idx)}. {opt}
-                                        </li>
-                                    ))}
+                                    {q.options.map((opt, idx) => {
+                                        const correct = isOptionCorrect(q, opt);
+                                        return (
+                                            <li key={idx} className={`text-sm p-2 rounded-lg border ${correct ? 'bg-green-50 border-green-200 text-green-700 font-medium' : 'bg-gray-50 border-gray-100 text-gray-600'}`}>
+                                                {String.fromCharCode(65 + idx)}. {opt}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>
@@ -166,23 +187,26 @@ const QuestionBank: React.FC = () => {
                 {formData.type === QuestionType.MULTIPLE_CHOICE && (
                     <div className="space-y-2">
                         <label className="block text-sm font-bold text-gray-700">Options</label>
-                        {formData.options?.map((opt, i) => (
-                            <div key={i} className="flex gap-2 items-center">
-                                <span className="text-xs font-bold w-6">{String.fromCharCode(65+i)}</span>
-                                <input 
-                                    className="flex-1 p-2 rounded-lg bg-gray-50 shadow-clay-inset outline-none text-sm" 
-                                    value={opt} 
-                                    onChange={e => updateOption(i, e.target.value)} 
-                                />
-                                <input 
-                                    type="radio" 
-                                    name="correct" 
-                                    checked={formData.correctAnswer === opt && opt !== ''} 
-                                    onChange={() => setFormData({...formData, correctAnswer: opt})}
-                                />
-                            </div>
-                        ))}
-                        <p className="text-xs text-gray-400 mt-1">Select the radio button next to the correct answer.</p>
+                        {formData.options?.map((opt, i) => {
+                            const isCorrect = Array.isArray(formData.correctAnswer) && formData.correctAnswer.includes(opt);
+                            return (
+                                <div key={i} className="flex gap-2 items-center">
+                                    <span className="text-xs font-bold w-6">{String.fromCharCode(65+i)}</span>
+                                    <input 
+                                        className="flex-1 p-2 rounded-lg bg-gray-50 shadow-clay-inset outline-none text-sm" 
+                                        value={opt} 
+                                        onChange={e => updateOption(i, e.target.value)} 
+                                    />
+                                    <input 
+                                        type="checkbox" 
+                                        className="w-5 h-5 accent-green-500"
+                                        checked={isCorrect && opt !== ''} 
+                                        onChange={() => toggleCorrectAnswer(opt)}
+                                    />
+                                </div>
+                            );
+                        })}
+                        <p className="text-xs text-gray-400 mt-1">Select all checkboxes next to the correct answers.</p>
                     </div>
                 )}
             </div>

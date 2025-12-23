@@ -1,3 +1,4 @@
+
 export enum Role {
   ADMIN = 'ADMIN',
   TEACHER = 'TEACHER',
@@ -24,7 +25,10 @@ export interface User {
   email?: string;
   role: Role;
   avatarUrl?: string;
-  studentId?: string; // For students
+  studentId?: string; 
+  bio?: string;
+  birthday?: string;
+  phone?: string;
 }
 
 export interface Violation {
@@ -35,6 +39,7 @@ export interface Violation {
   timestamp: number;
   confidence: number;
   imageUrl?: string;
+  reason?: string;
   resolved: boolean;
 }
 
@@ -48,14 +53,12 @@ export interface StudentStatus {
   gazeVector?: { x: number; y: number };
 }
 
-// --- New Types for Exam Management ---
-
 export interface ProctorConfig {
-  requireFaceAuth: boolean;      // Verify face before start
-  continuousFaceAuth: boolean;   // Verify face during exam
-  detectCheating: boolean;       // Master toggle for AI detection
-  maxViolations: number;         // Threshold to auto-submit/block
-  allowHeadphones: boolean;      // Specific rule
+  requireFaceAuth: boolean;
+  continuousFaceAuth: boolean;
+  detectCheating: boolean;
+  maxViolations: number;
+  allowHeadphones: boolean;
 }
 
 export interface Exam {
@@ -65,8 +68,6 @@ export interface Exam {
   durationMinutes: number;
   startTime: string;
   status: 'upcoming' | 'live' | 'completed';
-  
-  // Management Fields
   assignedClassIds: string[];
   questionIds: string[];
   maxAttempts: number;
@@ -75,35 +76,52 @@ export interface Exam {
   proctorConfig: ProctorConfig;
 }
 
-// --- New Types for Class Management ---
-
 export interface Lesson {
   id: string;
   title: string;
+  description?: string;
+  content?: string;
   type: 'document' | 'video' | 'audio' | 'link';
   format: 'pdf' | 'docx' | 'xlsx' | 'mp4' | 'mp3' | 'url';
   url: string;
   dateAdded: string;
+  teacherName?: string; // For Admin search
 }
 
 export interface Assignment {
   id: string;
   title: string;
   description: string;
+  startDate: string;
   dueDate: string;
+  classId?: string;
+  teacherName?: string; // For Admin search
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  studentName: string;
+  submittedAt?: string;
+  content?: string;
+  fileUrls?: string[];
+  grade?: number;
+  feedback?: string;
+  gradedBy?: string;
+  status: 'pending' | 'submitted' | 'graded';
 }
 
 export interface ClassGroup {
   id: string;
   name: string;
   subject: string;
-  studentCount: number; // Can be derived from studentIds.length
+  studentCount: number;
   schedule: string;
-  
-  // New Management Fields
   studentIds: string[];
   lessons: Lesson[];
   assignments: Assignment[];
+  teacherName?: string; // For Admin search
 }
 
 export enum QuestionType {
@@ -116,10 +134,11 @@ export interface Question {
   id: string;
   text: string;
   type: QuestionType;
-  options?: string[]; // For MCQ
-  correctAnswer?: string;
+  options?: string[];
+  correctAnswer?: string | string[];
   difficulty: 'Easy' | 'Medium' | 'Hard';
   tags: string[];
+  creatorName?: string; // For Admin search
 }
 
 export interface ExamResult {
@@ -135,7 +154,7 @@ export interface ExamStatistics {
   examId: string;
   totalStudents: number;
   averageScore: number;
-  violationRate: number; // Percentage 0-100
+  violationRate: number;
   scoreDistribution: { range: string; count: number }[];
   violationDistribution: { type: string; count: number }[];
 }

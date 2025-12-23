@@ -6,9 +6,9 @@ Tài liệu này mô tả **đầy đủ từng bảng, từng thuộc tính, m�
 
 Thiết kế hướng tới:
 
-* RBAC chuẩn (Role-Based Access Control)
-* Học trực tuyến + thi online có AI giám sát
-* Dễ mở rộng, audit, scale production
+- RBAC chuẩn (Role-Based Access Control)
+- Học trực tuyến + thi online có AI giám sát
+- Dễ mở rộng, audit, scale production
 
 ---
 
@@ -292,31 +292,279 @@ Log vi phạm gian lận do AI phát hiện.
 
 ## 3. Các mối quan hệ
 
-* Users ↔ Roles (Many-to-Many)
-* Roles ↔ Permissions (Many-to-Many)
-* Courses ↔ Users (Instructor / Student)
-* Quiz / Assignment ↔ Attempts / Submissions
-* Quiz ↔ AI Proctoring Violations
+### 3.1 Quan hệ User & Authentication
+
+- **users ↔ profiles** (One-to-One)
+
+  - Một user có một profile
+  - FK: `profiles.user_id` → `users.id` (CASCADE DELETE)
+
+- **users ↔ roles** (Many-to-Many qua `user_roles`)
+
+  - Một user có thể có nhiều vai trò
+  - Một vai trò có thể gán cho nhiều user
+  - FK: `user_roles.user_id` → `users.id` (CASCADE DELETE)
+  - FK: `user_roles.role_id` → `roles.id` (CASCADE DELETE)
+
+- **roles ↔ permissions** (Many-to-Many qua `role_permissions`)
+  - Một vai trò có thể có nhiều quyền
+  - Một quyền có thể thuộc nhiều vai trò
+  - FK: `role_permissions.role_id` → `roles.id` (CASCADE DELETE)
+  - FK: `role_permissions.permission_id` → `permissions.id` (CASCADE DELETE)
+
+### 3.2 Quan hệ Courses & Learning Content
+
+- **users ↔ courses** (One-to-Many)
+
+  - Một giảng viên (user) có thể tạo nhiều khóa học
+  - FK: `courses.user_id` → `users.id` (SET NULL on DELETE)
+
+- **courses ↔ users** (Many-to-Many qua `course_enrollments`)
+
+  - Một khóa học có nhiều học viên đăng ký
+  - Một học viên có thể đăng ký nhiều khóa học
+  - FK: `course_enrollments.course_id` → `courses.id` (CASCADE DELETE)
+  - FK: `course_enrollments.user_id` → `users.id` (CASCADE DELETE)
+
+- **courses ↔ lessons** (One-to-Many)
+  - Một khóa học có nhiều bài học
+  - FK: `lessons.course_id` → `courses.id` (CASCADE DELETE)
+  - FK: `lessons.user_id` → `users.id` (SET NULL on DELETE)
+
+### 3.3 Quan hệ Assignments
+
+- **courses ↔ assignments** (One-to-Many)
+
+  - Một khóa học có nhiều bài tập
+  - FK: `assignments.course_id` → `courses.id` (CASCADE DELETE)
+  - FK: `assignments.user_id` → `users.id` (SET NULL on DELETE)
+
+- **assignments ↔ assignment_submissions** (One-to-Many)
+  - Một assignment có nhiều bài nộp từ các học viên khác nhau
+  - FK: `assignment_submissions.assignment_id` → `assignments.id` (CASCADE DELETE)
+  - FK: `assignment_submissions.user_id` → `users.id` (CASCADE DELETE)
+  - FK: `assignment_submissions.graded_by` → `users.id` (SET NULL on DELETE)
+
+### 3.4 Quan hệ Quizzes & Exam System
+
+- **courses ↔ quizzes** (One-to-Many)
+
+  - Một khóa học có nhiều quiz
+  - FK: `quizzes.course_id` → `courses.id` (CASCADE DELETE)
+  - FK: `quizzes.user_id` → `users.id` (SET NULL on DELETE)
+
+- **quizzes ↔ quiz_questions** (One-to-Many)
+
+  - Một quiz có nhiều câu hỏi
+  - FK: `quiz_questions.quiz_id` → `quizzes.id` (CASCADE DELETE)
+
+- **quiz_questions ↔ quiz_question_answers** (One-to-Many)
+
+  - Một câu hỏi có nhiều đáp án
+  - FK: `quiz_question_answers.quiz_question_id` → `quiz_questions.id` (CASCADE DELETE)
+
+- **quizzes ↔ user_quiz_attempts** (One-to-Many)
+
+  - Một quiz có thể được làm nhiều lần bởi nhiều user
+  - FK: `user_quiz_attempts.quiz_id` → `quizzes.id` (CASCADE DELETE)
+  - FK: `user_quiz_attempts.user_id` → `users.id` (CASCADE DELETE)
+
+- **user_quiz_attempts ↔ user_quiz_attempt_details** (One-to-Many)
+  - Một lần làm bài có nhiều câu trả lời chi tiết
+  - FK: `user_quiz_attempt_details.user_quiz_attempt_id` → `user_quiz_attempts.id` (CASCADE DELETE)
+  - FK: `user_quiz_attempt_details.quiz_question_id` → `quiz_questions.id` (CASCADE DELETE)
+  - FK: `user_quiz_attempt_details.selected_option_id` → `quiz_question_answers.id` (SET NULL on DELETE)
+
+### 3.5 Quan hệ AI Proctoring
+
+- **user_quiz_attempts ↔ quiz_attempt_violations** (One-to-Many)
+  - Một lần làm bài có thể có nhiều vi phạm được phát hiện bởi AI
+  - FK: `quiz_attempt_violations.user_quiz_attempt_id` → `user_quiz_attempts.id` (CASCADE DELETE)
 
 ---
 
 ## 4. Các Transaction tiêu biểu
 
-### 4.1 Tạo user
+### 4.1 Đăng ký user mới (Registration)
 
-BEGIN → users → profiles → user_roles → COMMIT
+```sql
+BEGIN TRANSACTION;
+  -- Bước 1: Tạo user
+  INSERT INTO users (name, email, password) VALUES (?, ?, ?);
+  SET @user_id = LAST_INSERT_ID();
 
-### 4.2 Enroll khóa học
+  -- Bước 2: Tạo profile
+  INSERT INTO profiles (user_id, bio, phone, avatar, birthDay)
+  VALUES (@user_id, ?, ?, ?, ?);
 
-BEGIN → course_enrollments → COMMIT
+  -- Bước 3: Gán role mặc định (student)
+  INSERT INTO user_roles (user_id, role_id)
+  VALUES (@user_id, (SELECT id FROM roles WHERE name = 'student'));
+COMMIT;
+```
 
-### 4.3 Làm quiz
+**Rollback nếu:**
 
-BEGIN → user_quiz_attempts → details → violations → COMMIT
+- Email đã tồn tại (UNIQUE constraint)
+- Role không tồn tại
 
-### 4.4 Chấm điểm
+### 4.2 Ghi danh khóa học (Course Enrollment)
 
-BEGIN → update score → COMMIT
+```sql
+BEGIN TRANSACTION;
+  -- Kiểm tra user đã enroll chưa
+  SELECT COUNT(*) FROM course_enrollments
+  WHERE course_id = ? AND user_id = ?;
+
+  -- Nếu chưa, thêm enrollment
+  INSERT INTO course_enrollments (course_id, user_id)
+  VALUES (?, ?);
+COMMIT;
+```
+
+**Rollback nếu:**
+
+- Khóa học không tồn tại
+- User đã đăng ký (UNIQUE constraint)
+
+### 4.3 Tạo Quiz với câu hỏi và đáp án
+
+```sql
+BEGIN TRANSACTION;
+  -- Bước 1: Tạo quiz
+  INSERT INTO quizzes (course_id, user_id, name, description, start_time, end_time, minute,
+                       enable_face_recognition, enable_anti_cheat, max_violations)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  SET @quiz_id = LAST_INSERT_ID();
+
+  -- Bước 2: Thêm câu hỏi
+  INSERT INTO quiz_questions (quiz_id, question) VALUES (@quiz_id, ?);
+  SET @question_id = LAST_INSERT_ID();
+
+  -- Bước 3: Thêm các đáp án cho câu hỏi
+  INSERT INTO quiz_question_answers (quiz_question_id, answer, is_correct, point)
+  VALUES (@question_id, ?, 0, 0),
+         (@question_id, ?, 1, 5),  -- Đáp án đúng
+         (@question_id, ?, 0, 0),
+         (@question_id, ?, 0, 0);
+
+  -- Lặp lại bước 2-3 cho các câu hỏi khác...
+COMMIT;
+```
+
+**Rollback nếu:**
+
+- Course không tồn tại
+- User không có quyền tạo quiz
+- Thời gian không hợp lệ
+
+### 4.4 Làm Quiz (Quiz Attempt với tracking vi phạm)
+
+```sql
+BEGIN TRANSACTION;
+  -- Bước 1: Kiểm tra điều kiện
+  SELECT COUNT(*) FROM user_quiz_attempts
+  WHERE quiz_id = ? AND user_id = ?;
+  -- Nếu > max_attempts → ROLLBACK
+
+  -- Bước 2: Tạo attempt
+  INSERT INTO user_quiz_attempts (quiz_id, user_id, score)
+  VALUES (?, ?, 0);
+  SET @attempt_id = LAST_INSERT_ID();
+
+  -- Bước 3: Lưu câu trả lời từng câu
+  INSERT INTO user_quiz_attempt_details
+    (user_quiz_attempt_id, quiz_question_id, selected_option_id, score)
+  VALUES (@attempt_id, ?, ?, ?);
+  -- Lặp lại cho mỗi câu...
+
+  -- Bước 4: Tính tổng điểm
+  UPDATE user_quiz_attempts
+  SET score = (SELECT SUM(score) FROM user_quiz_attempt_details
+               WHERE user_quiz_attempt_id = @attempt_id)
+  WHERE id = @attempt_id;
+
+  -- Bước 5: Log vi phạm nếu AI phát hiện
+  -- (Được gọi từ service riêng khi có sự kiện)
+  INSERT INTO quiz_attempt_violations
+    (user_quiz_attempt_id, type, level, detected_at, evidence_url)
+  VALUES (@attempt_id, 'LOOK_AWAY', 2, NOW(), ?);
+COMMIT;
+```
+
+**Rollback nếu:**
+
+- Vượt quá số lần làm cho phép
+- Quiz chưa bắt đầu hoặc đã kết thúc
+- Câu hỏi hoặc đáp án không tồn tại
+
+### 4.5 Nộp Assignment (Assignment Submission)
+
+```sql
+BEGIN TRANSACTION;
+  -- Kiểm tra đã nộp chưa
+  SELECT id FROM assignment_submissions
+  WHERE assignment_id = ? AND user_id = ?;
+
+  -- Nếu chưa nộp, tạo submission mới
+  INSERT INTO assignment_submissions
+    (assignment_id, user_id, file_path, status)
+  VALUES (?, ?, ?, 0);  -- status 0 = pending
+
+  -- Nếu đã nộp, cập nhật
+  UPDATE assignment_submissions
+  SET file_path = ?, updated_at = NOW()
+  WHERE assignment_id = ? AND user_id = ?;
+COMMIT;
+```
+
+**Rollback nếu:**
+
+- Assignment không tồn tại
+- Quá hạn nộp (due_time)
+- File không hợp lệ
+
+### 4.6 Chấm điểm Assignment
+
+```sql
+BEGIN TRANSACTION;
+  -- Cập nhật điểm và feedback
+  UPDATE assignment_submissions
+  SET score = ?,
+      feedback = ?,
+      status = 1,  -- 1 = graded
+      graded_by = ?,
+      updated_at = NOW()
+  WHERE id = ?;
+
+  -- Log activity (nếu có bảng audit)
+  -- INSERT INTO activity_logs...
+COMMIT;
+```
+
+**Rollback nếu:**
+
+- Submission không tồn tại
+- User không có quyền chấm (không phải instructor hoặc admin)
+
+### 4.7 Gán quyền cho Role (Role Permission Assignment)
+
+```sql
+BEGIN TRANSACTION;
+  -- Kiểm tra role và permission tồn tại
+  SELECT id FROM roles WHERE id = ?;
+  SELECT id FROM permissions WHERE id = ?;
+
+  -- Gán quyền
+  INSERT INTO role_permissions (role_id, permission_id)
+  VALUES (?, ?);
+COMMIT;
+```
+
+**Rollback nếu:**
+
+- Role hoặc Permission không tồn tại
+- Đã gán trước đó (UNIQUE constraint)
 
 ---
 

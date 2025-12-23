@@ -42,7 +42,11 @@ BASE_DIR_DATA_IMAGE = os.path.join(CURRENT_DIR, "database", "train")
 # Thư mục chứa ảnh từ backend (profile_image_users)
 BACKEND_UPLOAD_DIR = os.path.join(PARENT_DIR, "..", "..", "backend", "cmd", "uploads", "profile_image_users")
 
-# Thư mục chứa ảnh cheating
+# Thư mục chứa ảnh cheating (sẽ tạo theo cấu trúc quiz_attempt_id/user_id/)
+BACKEND_CHEATING_IMAGE_DIR = os.path.join(PARENT_DIR, "..", "..", "backend", "cmd", "uploads", "cheating_image_users")
+os.makedirs(BACKEND_CHEATING_IMAGE_DIR, exist_ok=True)
+
+# Thư mục chứa ảnh cheating (legacy)
 CHEATING_IMAGE_DIR = os.path.join(PARENT_DIR, "logs", "cheating_images")
 os.makedirs(CHEATING_IMAGE_DIR, exist_ok=True)
 
@@ -2569,3 +2573,247 @@ def get_image(subpath: str):
 
     # Trả file ảnh
     return FileResponse(file_path)
+
+
+##################################################################################
+# API mới cho quiz exam với quiz_attempt_id
+@app.post("/detect_quiz_exam", summary="Phát hiện gian lận trong quiz exam", description="Nhận ảnh và quiz_attempt_id để phát hiện gian lận")
+async def detect_quiz_exam(
+    request: Request,
+    cheat_weights_str: Annotated[str, Form(...)],
+    candidate_id: str = Form(..., description="ID của thí sinh"),
+    quiz_attempt_id: str = Form(..., description="ID của lần thi"),
+    file: UploadFile = File(..., description="Ảnh của thí sinh")
+):
+    # Lấy extension từ filename
+    filename_base, file_ext = os.path.splitext(file.filename)
+    file_ext_lower = file_ext.lower()
+    
+    # Kiểm tra định dạng ảnh - kiểm tra CẢ content_type VÀ file extension
+    allowed_content_types = ["image/jpeg", "image/png", "image/jpg", "application/octet-stream"]
+    allowed_extensions = [".jpg", ".jpeg", ".png"]
+    
+    # Log để debug
+    logger.info(f"File content_type: {file.content_type}, filename: {file.filename}, extension: {file_ext_lower}")
+    
+    # Chấp nhận nếu content_type hợp lệ HOẶC extension hợp lệ
+    if file.content_type not in allowed_content_types and file_ext_lower not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ ảnh JPEG hoặc PNG.")
+
+    # Tạo tên file tạm duy nhất
+    temp_filename = f"{uuid.uuid4()}{file_ext}"
+    temp_path = os.path.join(UPLOAD_DIR, temp_filename)
+
+    try:
+        # Ghi file async
+        async with aiofiles.open(temp_path, "wb") as out_file:
+            content = await file.read()
+            await out_file.write(content)
+
+        logger.info(f"File written to {temp_path}")
+        logger.info(f"Received: candidate_id={candidate_id}, quiz_attempt_id={quiz_attempt_id}, file={file.filename}")
+
+        # Gọi model detect
+        start_time = time.time()
+        try:
+            cheat_weights = json.loads(cheat_weights_str)
+            detect_result = facedetector.run(image_path=temp_path, cheat_weights=cheat_weights)
+        except Exception as detect_error:
+            logger.error(f"Lỗi trong facedetector: {str(detect_error)}")
+            raise HTTPException(status_code=500, detail=f"Lỗi trong facedetector: {str(detect_error)}")
+        end_time = time.time()
+
+        execution_time = end_time - start_time
+        detect_result["execution_time"] = f"{execution_time:.2f} seconds"
+
+        logger.info(f"Detect Result: {detect_result}")
+
+        if not isinstance(detect_result, dict):
+            logger.error(f"Detect result is not a dictionary: {detect_result}")
+            raise HTTPException(status_code=500, detail="Kết quả từ facedetector không hợp lệ")
+
+        # Múi giờ UTC+7
+        tz_vietnam = timezone(timedelta(hours=7))
+        now_vietnam = datetime.now(tz_vietnam)
+        timestamp = now_vietnam.strftime('%Y-%m-%d %H:%M:%S')
+        timestamp_file = now_vietnam.strftime('%Y%m%d-%H%M%S')
+
+        # Cấu trúc folder: /cheating_image_users/{quiz_attempt_id}/{user_id}/
+        user_cheating_dir = os.path.join(BACKEND_CHEATING_IMAGE_DIR, quiz_attempt_id, candidate_id)
+        os.makedirs(user_cheating_dir, exist_ok=True)
+
+        saved_filename = f"{filename_base}_{timestamp_file}{file_ext}"
+        saved_image_path = os.path.join(user_cheating_dir, saved_filename)
+        saved_image_url = f"/cheating_image_users/{quiz_attempt_id}/{candidate_id}/{saved_filename}"
+
+        log_entry = f"[{timestamp}] Quiz Attempt: {quiz_attempt_id} | Candidate ID: {candidate_id} | File: {file.filename} | Result: {detect_result} | Time: {execution_time:.2f}s\n"
+
+        # Nếu phát hiện gian lận, lưu ảnh
+        if detect_result.get("cheating", False):
+            with open(LOG_CHEAT, "a", encoding="utf-8") as f:
+                f.write(log_entry)
+
+            # Lưu ảnh vào folder cheating
+            copyfile(temp_path, saved_image_path)
+
+            # Ghi log CSV
+            timestamp_csv = now_vietnam.strftime("%Y%m%d")
+            csv_path = os.path.join(CSV_DIR, f"quiz_cheat_{timestamp_csv}.csv")
+            csv_exists = os.path.isfile(csv_path)
+
+            with open(csv_path, "a", newline="", encoding="utf-8") as csvfile:
+                writer = csv.writer(csvfile)
+                if not csv_exists:
+                    writer.writerow([
+                        "timestamp", 
+                        "quiz_attempt_id",
+                        "candidate_id",
+                        "filename", 
+                        "result", 
+                        "execution_time",
+                        "no_face", 
+                        "multiple_faces", 
+                        "gaze_off_screen", 
+                        "total_cheat_score"
+                    ])
+
+                cheat_status = detect_result.get("cheat_status", {})
+                writer.writerow([
+                    timestamp,
+                    quiz_attempt_id,
+                    candidate_id,
+                    saved_filename, 
+                    detect_result.get("cheating", ""), 
+                    f"{execution_time:.2f}s",
+                    cheat_status.get("no_face", ""), 
+                    cheat_status.get("multiple_faces", ""), 
+                    cheat_status.get("gaze_off_screen", ""), 
+                    detect_result.get("total_cheat_score", "")
+                ])
+        else:
+            with open(LOG_NO_CHEAT, "a", encoding="utf-8") as f:
+                f.write(log_entry)
+
+        # Luôn ghi vào log realtime
+        with open(LOG_REALTIME, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+
+        # Tạo list cheating reasons như /detect_pro
+        reasons = []
+        person_count = detect_result.get("person", 1)
+        
+        # 1️⃣ Điện thoại
+        cheat_phone_list = detect_result.get("cheat_mobilephone")
+        if cheat_phone_list and any(item.get("label") == "cell phone" for item in cheat_phone_list):
+            reasons.append("Phát hiện điện thoại")
+        
+        # 2️⃣ Tai nghe
+        cheat_headphone_list = detect_result.get("cheat_headphone")
+        if cheat_headphone_list and any(
+            item.get("label") in ["Earphone", "Headphone", "Neckband", "Airpods"]
+            for item in cheat_headphone_list
+        ):
+            reasons.append("Phát hiện tai nghe")
+        
+        # 3️⃣ Ánh mắt lệch (gaze)
+        if detect_result.get("gaze") and detect_result["gaze"].lower() != "center":
+            reasons.append("Mắt nhìn ra hướng khác")
+        
+        # 4️⃣ Không có người
+        if person_count == 0:
+            reasons.append("Không có người trong ca thi")
+            detect_result["cheating"] = True  # ✅ Đánh dấu gian lận
+        
+        # 5️⃣ Nhiều người trong ảnh
+        if person_count > 1:
+            reasons.append(f"Có {person_count} người trong ảnh")
+            detect_result["cheating"] = True  # ✅ Đánh dấu gian lận
+        
+        # 6️⃣ Không đúng người dự thi
+        faces = detect_result.get("faces", [])
+        if faces and isinstance(faces, list) and len(faces) > 0:
+            face_name = faces[0].get("name")
+            
+            # 🔍 Debug logging - so sánh giá trị và kiểu dữ liệu
+            logger.info(f"🔍 Face Recognition Debug:")
+            logger.info(f"  - face_name: '{face_name}' (type: {type(face_name)})")
+            logger.info(f"  - candidate_id: '{candidate_id}' (type: {type(candidate_id)})")
+            logger.info(f"  - Are they equal? {str(face_name) == str(candidate_id)}")
+            
+            # So sánh sau khi convert về string để tránh lỗi kiểu dữ liệu
+            if face_name and str(face_name).strip() != str(candidate_id).strip():
+                reasons.append("Không đúng người dự thi")
+                detect_result["cheating"] = True  # ✅ Đánh dấu gian lận
+                logger.warning(f"❌ Mismatch: Expected '{candidate_id}', got '{face_name}'")
+        
+        # Nếu không phát hiện gì
+        if not reasons:
+            reasons.append("Không phát hiện gian lận")
+        
+        # Gộp lại thành 1 câu
+        cheating_reason = ", ".join(reasons)
+
+        # Tạo response - đảm bảo tất cả boolean fields đều là bool, không phải number
+        cheat_status = detect_result.get("cheat_status", {})
+        response = {
+            "candidate_id": candidate_id,
+            "quiz_attempt_id": quiz_attempt_id,
+            "message": "Detection completed",
+            "cheating_detected": bool(detect_result.get("cheating", False)),
+            "cheating_reason": cheating_reason,
+            "multiple_persons": bool(cheat_status.get("multiple_faces", False)),
+            "multiple_faces": int(detect_result.get("detected_faces", 0)),
+            "no_face_detected": bool(cheat_status.get("no_face", False)),
+            "not_matching_candidate": bool(cheat_status.get("unknown_person", False)),
+            "unknown_person": bool(cheat_status.get("unknown_person", False)),
+            "matched_person_name": str(detect_result.get("matched_person_name", "")),
+            "similarity": float(detect_result.get("similarity", 0)),
+            "confidence_score": float(detect_result.get("confidence", 0)),
+            "headphone_detected": bool(cheat_status.get("headphone_detected", False)),
+            "headphone_name": str(detect_result.get("headphone_name", "")),
+            "headphone_confidence": float(detect_result.get("headphone_confidence", 0)),
+            "cellphone_detected": bool(cheat_status.get("cellphone_detected", False)),
+            "cellphone_name": str(detect_result.get("cellphone_name", "")),
+            "cellphone_confidence": float(detect_result.get("cellphone_confidence", 0)),
+            "is_spoofing": bool(cheat_status.get("is_spoofing", False)),
+            "spoofing_score": float(detect_result.get("spoofing_score", 0)),
+            "is_looking_away": bool(cheat_status.get("gaze_off_screen", False)),
+            "pitch_angle": float(detect_result.get("pitch_angle", 0)),
+            "yaw_angle": float(detect_result.get("yaw_angle", 0)),
+            "gaze_angle": float(detect_result.get("gaze_angle", 0)),
+            "total_violation_point": float(detect_result.get("total_cheat_score", 0)),
+            "detection_timestamp": timestamp,
+            "saved_image_path": saved_image_path if detect_result.get("cheating", False) else "",
+            "saved_image_url": saved_image_url if detect_result.get("cheating", False) else "",
+            "processing_time": float(execution_time)
+        }
+
+        logger.info(f"Response: {response}")
+        return JSONResponse(content=response)
+
+    except Exception as e:
+        # Múi giờ UTC+7
+        tz_vietnam = timezone(timedelta(hours=7))
+        now_vietnam = datetime.now(tz_vietnam)
+        timestamp = now_vietnam.strftime('%Y-%m-%d %H:%M:%S')
+        
+        error_message = f"[{timestamp}] Lỗi xử lý file {file.filename}: {str(e)}\n"
+        logger.error(error_message)
+
+        with open(LOG_ERROR, "a", encoding="utf-8") as f:
+            f.write(error_message)
+
+        with open(LOG_REALTIME, "a", encoding="utf-8") as f:
+            f.write(error_message)
+
+        raise HTTPException(status_code=500, detail="Lỗi trong quá trình xử lý ảnh")
+
+    finally:
+        # Xoá file tạm
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                logger.error(f"Lỗi khi xóa file tạm {temp_path}: {str(e)}")
+
+##################################################################################

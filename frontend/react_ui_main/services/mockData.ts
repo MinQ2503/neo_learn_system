@@ -1,4 +1,43 @@
-import { StudentStatus, ViolationType, Severity, Exam, User, Role, ClassGroup, Question, QuestionType, ExamResult } from '../types';
+
+import { StudentStatus, ViolationType, Severity, Exam, User, Role, ClassGroup, Question, QuestionType, ExamResult, AssignmentSubmission } from '../types';
+
+// Storage Keys
+const SUBMISSIONS_KEY = 'neo_submissions';
+
+// Helper to init storage if empty
+const initMockSubmissions = () => {
+  const existing = localStorage.getItem(SUBMISSIONS_KEY);
+  if (!existing) {
+    const mockSubs: AssignmentSubmission[] = [
+      {
+        id: 'sub-1',
+        assignmentId: 'a1',
+        studentId: 's1',
+        studentName: 'Alice Johnson',
+        submittedAt: new Date().toISOString(),
+        content: 'Chào thầy, đây là bài làm tuần 4 của em. Em đã hoàn thành 10 bài tập trong sách giáo khoa.',
+        fileUrls: ['#'],
+        status: 'submitted'
+      },
+      {
+        id: 'sub-2',
+        assignmentId: 'a1',
+        studentId: 's2',
+        studentName: 'Bob Smith',
+        submittedAt: new Date(Date.now() - 86400000).toISOString(),
+        content: 'Bài làm của Bob. Có một số câu em chưa rõ cách giải tích phân.',
+        fileUrls: ['#', '#'],
+        status: 'graded',
+        grade: 8.5,
+        feedback: 'Bài làm tốt, trình bày sạch sẽ. Cần chú ý hơn phần nguyên hàm.',
+        gradedBy: 'Dr. Sarah Connor'
+      }
+    ];
+    localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(mockSubs));
+  }
+};
+
+initMockSubmissions();
 
 export const INITIAL_EXAMS: Exam[] = [
   {
@@ -93,10 +132,11 @@ export const INITIAL_STUDENTS_STATUS: StudentStatus[] = [
 
 // CRUD Data
 export const INITIAL_USERS: User[] = [
-  { id: 's1', name: 'Alice Johnson', email: 'alice@school.edu', role: Role.STUDENT, studentId: '2023001' },
-  { id: 's2', name: 'Bob Smith', email: 'bob@school.edu', role: Role.STUDENT, studentId: '2023002' },
-  { id: 's3', name: 'Charlie Davis', email: 'charlie@school.edu', role: Role.STUDENT, studentId: '2023003' },
-  { id: 't1', name: 'Dr. Sarah Connor', email: 'sarah@school.edu', role: Role.TEACHER },
+  { id: 'admin-id', name: 'System Administrator', email: 'admin', role: Role.ADMIN },
+  { id: 's1', name: 'Alice Johnson', email: 'alice@school.edu', role: Role.STUDENT, studentId: '2023001', avatarUrl: 'https://picsum.photos/200/200?random=s1' },
+  { id: 's2', name: 'Bob Smith', email: 'bob@school.edu', role: Role.STUDENT, studentId: '2023002', avatarUrl: 'https://picsum.photos/200/200?random=s2' },
+  { id: 's3', name: 'Charlie Davis', email: 'charlie@school.edu', role: Role.STUDENT, studentId: '2023003', avatarUrl: 'https://picsum.photos/200/200?random=s3' },
+  { id: 't1', name: 'Dr. Sarah Connor', email: 'sarah@school.edu', role: Role.TEACHER, avatarUrl: 'https://picsum.photos/200/200?random=t1' },
 ];
 
 export const INITIAL_CLASSES: ClassGroup[] = [
@@ -106,13 +146,38 @@ export const INITIAL_CLASSES: ClassGroup[] = [
     subject: 'Mathematics', 
     studentCount: 34, 
     schedule: 'Mon/Wed 10:00 AM',
+    teacherName: 'Dr. Sarah Connor',
     studentIds: ['s1', 's2', 's3'],
     lessons: [
-        { id: 'l1', title: 'Derivatives Intro', type: 'document', format: 'pdf', url: '#', dateAdded: new Date().toISOString() },
-        { id: 'l2', title: 'Lecture 1 Recording', type: 'video', format: 'mp4', url: '#', dateAdded: new Date().toISOString() }
+        { 
+          id: 'l1', 
+          title: 'Derivatives Intro', 
+          description: 'Cơ bản về đạo hàm và ứng dụng.',
+          content: 'Trong bài này chúng ta sẽ tìm hiểu về định nghĩa đạo hàm thông qua giới hạn...',
+          type: 'document', 
+          format: 'pdf', 
+          url: '#', 
+          dateAdded: new Date().toISOString() 
+        },
+        { 
+          id: 'l2', 
+          title: 'Lecture 1 Recording', 
+          description: 'Video ghi lại buổi học đầu tiên.',
+          content: 'Nội dung video bao gồm phần giới thiệu môn học và chương 1.',
+          type: 'video', 
+          format: 'mp4', 
+          url: '#', 
+          dateAdded: new Date().toISOString() 
+        }
     ],
     assignments: [
-        { id: 'a1', title: 'Problem Set 1', description: 'Complete problems 1-10 on page 24.', dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10) }
+        { 
+          id: 'a1', 
+          title: 'Problem Set 1', 
+          description: 'Complete problems 1-10 on page 24.', 
+          startDate: new Date().toISOString().slice(0, 10),
+          dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10) 
+        }
     ]
   },
   { 
@@ -121,6 +186,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
     subject: 'Physics', 
     studentCount: 28, 
     schedule: 'Tue/Thu 02:00 PM',
+    teacherName: 'Dr. Sarah Connor',
     studentIds: ['s4', 's5'],
     lessons: [],
     assignments: []
@@ -128,10 +194,10 @@ export const INITIAL_CLASSES: ClassGroup[] = [
 ];
 
 export const INITIAL_QUESTIONS: Question[] = [
-  { id: 'q1', text: 'What is the derivative of x^2?', type: QuestionType.MULTIPLE_CHOICE, options: ['x', '2x', 'x^2', '2'], correctAnswer: '2x', difficulty: 'Easy', tags: ['Calculus'] },
-  { id: 'q2', text: 'Explain the theory of relativity.', type: QuestionType.ESSAY, difficulty: 'Hard', tags: ['Physics'] },
-  { id: 'q3', text: 'The Earth is flat.', type: QuestionType.TRUE_FALSE, options: ['True', 'False'], correctAnswer: 'False', difficulty: 'Easy', tags: ['Geography'] },
-  { id: 'q4', text: 'Solve for x: 2x + 5 = 15', type: QuestionType.MULTIPLE_CHOICE, options: ['2', '5', '10', '0'], correctAnswer: '5', difficulty: 'Easy', tags: ['Algebra'] },
+  { id: 'q1', text: 'What is the derivative of x^2?', type: QuestionType.MULTIPLE_CHOICE, options: ['x', '2x', 'x^2', '2'], correctAnswer: ['2x'], difficulty: 'Easy', tags: ['Calculus'], creatorName: 'Dr. Sarah Connor' },
+  { id: 'q2', text: 'Explain the theory of relativity.', type: QuestionType.ESSAY, difficulty: 'Hard', tags: ['Physics'], creatorName: 'Dr. Sarah Connor' },
+  { id: 'q3', text: 'The Earth is flat.', type: QuestionType.TRUE_FALSE, options: ['True', 'False'], correctAnswer: ['False'], difficulty: 'Easy', tags: ['Geography'], creatorName: 'System Admin' },
+  { id: 'q4', text: 'Solve for x: 2x + 5 = 15', type: QuestionType.MULTIPLE_CHOICE, options: ['2', '5', '10', '0'], correctAnswer: ['5'], difficulty: 'Easy', tags: ['Algebra'], creatorName: 'System Admin' },
 ];
 
 // Mock Results for Reports
