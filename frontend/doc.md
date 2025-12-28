@@ -535,7 +535,6 @@ Các service trong [services/api/](services/api/) đã được chuẩn bị đ�
 ## 📌 TODO / Cải tiến
 
 - [ ] Kết nối với backend thực (Go API)
-- [ ] Implement real-time updates (WebSocket)
 - [ ] Add unit tests (Jest/Vitest)
 - [ ] Optimize bundle size
 - [ ] Add loading states và error boundaries

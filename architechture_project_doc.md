@@ -24,7 +24,7 @@ Neo Learn System là một hệ thống E-learning với tích hợp AI giám s�
 │  │  • Course Management UI                                     │ │
 │  └────────────────────────────────────────────────────────────┘ │
 └──────────────────────┬──────────────────────────────────────────┘
-                       │ HTTP/HTTPS + WebSocket
+                       │ HTTP/HTTPS
                        │ REST API Calls
                        ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1612,7 +1612,6 @@ tx.Commit()
 - Object storage (AWS S3/MinIO)
 - CDN for static assets
 - Database replication (Master-Slave)
-- WebSocket for real-time notifications
 - Horizontal scaling (multiple Backend instances)
 
 ---
